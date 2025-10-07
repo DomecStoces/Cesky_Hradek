@@ -21,10 +21,24 @@ data_long <- data %>%
     names_to = "Species",
     values_to = "Count"
   ) %>%
-  filter(!is.na(Count) & Count > 0)  # optional cleanup
+  filter(!is.na(Count) & Count > 0)
 
 # Save as new Excel file
 write_xlsx(data_long, "data_long.xlsx")
-
-# Preview result
 head(data_long)
+
+data_long <- data_long %>%
+  mutate(
+    FRic = as.numeric(FRic),
+    FEve = as.numeric(FEve),
+    FDiv = as.numeric(FDiv)
+  )
+data_long <- data_long %>%
+  mutate(across(
+    where(~ all(is.na(.) | grepl("^-?[0-9.]+$", .))),
+    as.numeric
+  ))
+data_long %>%
+  filter(!grepl("^-?[0-9.]+$", FRic) & !is.na(FRic)) %>%
+  distinct(FRic)
+str(data_long)
