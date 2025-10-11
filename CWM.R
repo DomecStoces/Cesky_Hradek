@@ -1,6 +1,7 @@
 # Fourth corner analysis
 library(readxl)
 library(ade4)
+library(dplyr)
 
 # Load all sheets into a list
 fourth_corner <- lapply(c("sp", "env", "traits"), function(x) read_excel("fourth_corner.xlsx", sheet = x))
@@ -13,9 +14,19 @@ dim(fourth_corner$sp)     # Dimensions of 'sp' sheet
 dim(fourth_corner$env)    # Dimensions of 'env' sheet
 dim(fourth_corner$traits) # Dimensions of 'traits' sheet
 
+# Add a scaled squared altitude column to env
 fourth_corner$env <- as.data.frame(lapply(fourth_corner$env, function(x) {
   if (is.character(x)) as.factor(x) else x
 }))
+fourth_corner$env <- fourth_corner$env %>%
+  mutate(
+    Altitude_scaled = scale(Altitude, center = TRUE, scale = TRUE)[,1],
+    Altitude_scaled2 = Altitude_scaled^2
+  )
+fourth_corner$env <- fourth_corner$env %>%
+  select(-Altitude) %>%   # remove the raw one
+  relocate(Altitude_scaled, Altitude_scaled2, .after = Wind)
+
 fourth_corner$traits <- as.data.frame(fourth_corner$traits)
 fourth_corner$traits$Body.size <- as.numeric(gsub(",", ".", fourth_corner$traits$Body.size))
 
@@ -155,26 +166,60 @@ library(reshape2)
 library(dplyr)
 library(tibble)  # Load tibble for row name conversion
 
-final_dataset <- final_dataset %>%
+data_long1 <- data_long1 %>%
   mutate(
-    Dietary = as.numeric(as.factor(Dietary)),
-    Distribution = as.numeric(as.factor(Distribution)),
-    `Host species` = as.numeric(as.factor(`Host species`)),
-    Overwintering = as.numeric(as.factor(Overwintering)),
-    `Leaf action` = as.numeric(as.factor(`Leaf action`))
+    # Dietary
+    Dietary = recode(Dietary,
+                     "Predator" = 1,
+                     "Granivor" = 2,
+                     "Omnivor" = 3),
+    
+    # Breeding
+    Breeding = recode(Breeding,
+                      "Spring" = 1,
+                      "Autumn" = 2),
+    
+    # Wings
+    Wings = recode(Wings,
+                   "B" = 1,      
+                   "M" = 2),
+    
+    # Moisture tolerance
+    Moisture.tolerance = recode(Moisture.tolerance,
+                                "X" = 1,  
+                                "S" = 2,  
+                                "I" = 3,  
+                                "V" = 4,  
+                                "H" = 5), 
+    
+    # Areal distribution
+    Areal.distribution = recode(Areal.distribution,
+                                "Central Europe"     = 1,
+                                "Europe"             = 2,
+                                "West Palearctic"    = 2,
+                                "South Palearctic"   = 2,
+                                "Eurasian"           = 3,
+                                "Eurosiberian"       = 3,
+                                "Palearctic"         = 4,
+                                "North Palearctic"   = 4,
+                                "Transpalearctic"    = 4,
+                                "Circumboreal"       = 4,
+                                "Holoarctic"         = 4),
+    
+    # Body.size
+    Body.size = as.numeric(Body.size)
   )
 
-colnames(final_dataset)
+colnames(data_long1)
 
 cwm_results <- final_dataset %>%
   group_by(Elevation, Mountain) %>%
   summarize(
     Dietary_cwm = weighted.mean(Dietary, Number, na.rm = TRUE),
     Red_list_cwm = weighted.mean(`Red list species`, Number, na.rm = TRUE),
-    Wingspan_cwm = weighted.mean(Wingspan, Number, na.rm = TRUE),
-    Distribution_cwm = weighted.mean(Distribution, Number, na.rm = TRUE),
+    Body_cwm = weighted.mean(Body.size, Number, na.rm = TRUE),
+    Distribution_cwm = weighted.mean(Areal.distribution, Number, na.rm = TRUE),
     Host_species_cwm = weighted.mean(`Host species`, Number, na.rm = TRUE),
-    Overwintering_cwm = weighted.mean(Overwintering, Number, na.rm = TRUE),
     Leaf_action_cwm = weighted.mean(`Leaf action`, Number, na.rm = TRUE),Abundance=sum(Number)
   )
 
@@ -186,15 +231,16 @@ write.csv(cwm_results, "cwm_results.csv", row.names = FALSE)
 
 # Convert categorical variables to factors
 cwm_results <- cwm_results %>%
-  mutate(Mountain = as.factor(Mountain))
-
-# Convert categorical variables to factors
-cwm_results <- cwm_results %>%
   mutate(Mountain = as.factor(Mountain),
          `Time period` = as.factor(`Time period`))
 
+# Center and scale Altitude
+data_long1 <- data_long1 %>%
+  mutate(Altitude_scaled = scale(Altitude, center = TRUE, scale = TRUE),
+         Altitude_scaled2 = Altitude_scaled^2)
+
 # Fit Generalized Linear Mixed Model (GLMM)
-mod1 <- lm(Distribution_cwm ~ Elevation + Mountain,
+mod1 <- lm(Distribution_cwm ~ poly(Altitude, 2, scale = TRUE) + Exposition2,
            data = cwm_results)
 Anova(mod1,type = "III")
 
