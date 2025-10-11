@@ -48,11 +48,31 @@ traits1 <- traits1 %>%
   mutate(Species = gsub(" ", "_", Species))
 
 data_long1 <- data_long1 %>%
-  select(-Dietary, -Breeding, -Wings, -Bioindication.group,
-         -Moisture.tolerance, -Areal.distribution, -Body.size) %>%
+  mutate(Species = gsub(" ", "_", Species)) %>% 
   left_join(traits1, by = "Species")
 
-sum(is.na(data_long1$Dietary))
-setdiff(unique(data_long1$Species), unique(traits1$Species))
+# Add environemntal conditions from clima-station Nová Ves v Horách (U1NOVE1)
+data_long1 <- data_long1 %>%
+  mutate(Locality = as.character(Locality),
+         Sequence = as.numeric(Sequence))
+
+env <- env %>%
+  mutate(Locality = as.character(Locality),
+         Sequence = as.numeric(Sequence))
+
+# Merge (add environmental columns)
+data_long1 <- left_join(data_long1, env, by = c("Sequence", "Locality"))
 glimpse(data_long1)
+
+env %>%
+  count(Sequence, Locality) %>%
+  filter(n > 1)
+env <- env %>%
+  distinct(Sequence, Locality, .keep_all = TRUE)
+data_long1 <- data_long1 %>%
+  select(-Temperature, -Precipitation, -Wind) %>%
+  left_join(env, by = c("Sequence", "Locality"))
+
 write_xlsx(data_long1, "data_long1.xlsx")
+
+
