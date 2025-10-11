@@ -1,25 +1,25 @@
 library(corrplot)
 library(dplyr)
 
-# --- 1️⃣ Select only the numeric environmental variables
+# Select only the numeric environmental variables
 numeric_vars <- c("Temperature", "Precipitation", "Wind")
 
 # Check they exist in your dataset
 numeric_vars %in% names(data_long1)
 
-# --- 2️⃣ Extract those columns
+# Extract those columns
 corr_numeric <- data_long1 %>%
   select(all_of(numeric_vars))
 
-# --- 3️⃣ Compute Spearman correlation matrix
+# Compute Spearman correlation matrix
 cor_matrix <- cor(corr_numeric, method = "spearman", use = "pairwise.complete.obs")
 
-# --- 4️⃣ Plot correlation heatmap
+# Plot correlation heatmap
 corrplot(cor_matrix, method = "color", type = "upper",
          order = "hclust", tl.col = "black", tl.srt = 45,
          addCoef.col = "black", number.cex = 0.8)
 
-# --- 5️⃣ Save to TIFF
+# Save to TIFF
 tiff("Spearman_rank_corr.tiff", units = "in", width = 7, height = 5, res = 300)
 corrplot(cor_matrix, method = "color", type = "upper",
          order = "hclust", tl.col = "black", tl.srt = 45,
