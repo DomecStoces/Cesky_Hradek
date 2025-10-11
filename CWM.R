@@ -16,32 +16,35 @@ dim(fourth_corner$traits) # Dimensions of 'traits' sheet
 fourth_corner$env <- as.data.frame(lapply(fourth_corner$env, function(x) {
   if (is.character(x)) as.factor(x) else x
 }))
-
-fourth_corner$env$Elevation <- as.numeric(as.character(fourth_corner$env$Elevation))
-fourth_corner$env <- fourth_corner$env[, !names(fourth_corner$env)]
-fourth_corner$traits$Wingspan <- as.numeric(gsub(",", ".", fourth_corner$traits$Wingspan))
+fourth_corner$traits <- as.data.frame(fourth_corner$traits)
+fourth_corner$traits$Body.size <- as.numeric(gsub(",", ".", fourth_corner$traits$Body.size))
 
 # Convert numeric categorical columns to factors
-fourth_corner$env$`Movement pattern` <- as.factor(fourth_corner$env$`Movement pattern`)
-fourth_corner$env$Treatment <- as.factor(fourth_corner$env$Treatment)
-fourth_corner$env$Season <- as.factor(fourth_corner$env$Season)
+fourth_corner$env$Exposition2 <- as.numeric(fourth_corner$env$Exposition2)
+fourth_corner$env$Altitude <- as.numeric(fourth_corner$env$Altitude)
+fourth_corner$env$Temperature <- as.numeric(fourth_corner$env$Temperature)
+fourth_corner$env$Precipitation <- as.numeric(fourth_corner$env$Precipitation)
+fourth_corner$env$Wind <- as.numeric(fourth_corner$env$Wind)
 
-fourth_corner$traits <- as.data.frame(fourth_corner$traits)
-fourth_corner$env <- as.data.frame(fourth_corner$env)
 
 fourth_corner$sp[is.na(fourth_corner$sp)] <- 0
 fourth_corner$traits[is.na(fourth_corner$traits)] <- 0
+fourth_corner$traits_num <- fourth_corner$traits %>%
+  select(-Species) %>%
+  mutate(across(everything(), as.numeric))
 afcL.aravo <- dudi.coa(fourth_corner$sp, scannf = FALSE)
 acpR.aravo <- dudi.hillsmith(fourth_corner$env, row.w = afcL.aravo$lw,
                              scannf = FALSE)
-acpQ.aravo <- dudi.pca(fourth_corner$traits, row.w = afcL.aravo$cw,
+acpQ.aravo <- dudi.pca(fourth_corner$traits_num, 
+                       row.w = afcL.aravo$cw, 
                        scannf = FALSE)
 rlq.aravo <- rlq(acpR.aravo, afcL.aravo, acpQ.aravo,
                  scannf = FALSE)
 
 nrepet <- 999
 four.comb.aravo <- fourthcorner(fourth_corner$env, fourth_corner$sp,
-                                fourth_corner$traits, modeltype = 6, p.adjust.method.G = "none",
+                                fourth_corner$traits_num, modeltype = 6,
+                                p.adjust.method.G = "none",
                                 p.adjust.method.D = "none", nrepet = nrepet)
 
 
