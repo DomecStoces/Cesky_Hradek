@@ -42,3 +42,17 @@ data_long %>%
   filter(!grepl("^-?[0-9.]+$", FRic) & !is.na(FRic)) %>%
   distinct(FRic)
 str(data_long)
+
+# Add traits to long format dataset 
+traits1 <- traits1 %>%
+  mutate(Species = gsub(" ", "_", Species))
+
+data_long1 <- data_long1 %>%
+  select(-Dietary, -Breeding, -Wings, -Bioindication.group,
+         -Moisture.tolerance, -Areal.distribution, -Body.size) %>%
+  left_join(traits1, by = "Species")
+
+sum(is.na(data_long1$Dietary))
+setdiff(unique(data_long1$Species), unique(traits1$Species))
+glimpse(data_long1)
+write_xlsx(data_long1, "data_long1.xlsx")
