@@ -94,60 +94,75 @@ data_long1 <- data_long1 %>%
   mutate(
     # Dietary
     Dietary = dplyr::recode(trimws(Dietary),
-                     "Predator" = 1,
-                     "Granivor" = 2,
-                     "Granivore" = 2,  # in case of spelling variation
-                     "Omnivor" = 3,
-                     "Omnivore" = 3),
+                            "Predator" = 1,
+                            "Granivor" = 2,
+                            "Granivore" = 2,
+                            "Omnivor" = 3,
+                            "Omnivore" = 3,
+                            .default = NA_real_
+    ),
     
     # Breeding
     Breeding = dplyr::recode(trimws(Breeding),
-                      "Spring" = 1,
-                      "Autumn" = 2),
+                             "Spring" = 1,
+                             "Autumn" = 2,
+                             .default = NA_real_
+    ),
     
-    # Wings
-    Wings = dplyr::recode(trimws(Wings),
-                   "B" = 1,  # brachypterous
-                   "M" = 2), # macropterous
+    # Wings (Wing morphotype)
+    Wing.morph = dplyr::recode(trimws(Wing.morph),
+                               "A" = 1,
+                               "A/B" = 2,
+                               "B" = 3,
+                               "B/M" = 4,
+                               "M" = 5,
+                               .default = NA_real_
+    ),
     
     # Bioindication group
     Bioindication.group = dplyr::recode(trimws(Bioindication.group),
-                                 "E" = 1,
-                                 "A" = 2,
-                                 "R" = 3),
+                                        "E" = 1,
+                                        "A" = 2,
+                                        "R" = 3,
+                                        .default = NA_real_
+    ),
     
     # Moisture tolerance
     Moisture.tolerance = dplyr::recode(trimws(Moisture.tolerance),
-                                "X" = 1,
-                                "S" = 2,
-                                "I" = 3,
-                                "V" = 4,
-                                "H" = 5),
+                                       "X" = 1,
+                                       "S" = 2,
+                                       "I" = 3,
+                                       "V" = 4,
+                                       "H" = 5,
+                                       .default = NA_real_
+    ),
     
     # Areal distribution
     Areal.distribution = dplyr::recode(trimws(Areal.distribution),
-                                "Central Europe"   = 1,
-                                "Europe"           = 2,
-                                "West Palearctic"  = 2,
-                                "South Palearctic" = 2,
-                                "Eurasian"         = 3,
-                                "Eurosiberian"     = 3,
-                                "Palearctic"       = 4,
-                                "North Palearctic" = 4,
-                                "Transpalearctic"  = 4,
-                                "Circumboreal"     = 4,
-                                "Holoarctic"       = 4),
+                                       "Central Europe"   = 1,
+                                       "Europe"           = 2,
+                                       "West Palearctic"  = 2,
+                                       "South Palearctic" = 2,
+                                       "Eurasian"         = 3,
+                                       "Eurosiberian"     = 3,
+                                       "Palearctic"       = 4,
+                                       "North Palearctic" = 4,
+                                       "Transpalearctic"  = 4,
+                                       "Circumboreal"     = 4,
+                                       "Holoarctic"       = 4,
+                                       .default = NA_real_
+    ),
     
     # Body size
     Body.size = as.numeric(Body.size)
   ) %>%
   mutate(
-    Dietary             = rescale(Dietary,             to = c(0, 1)),
-    Breeding            = rescale(Breeding,            to = c(0, 1)),
-    Wings               = rescale(Wings,               to = c(0, 1)),
-    Bioindication.group = rescale(Bioindication.group, to = c(0, 1)),
-    Moisture.tolerance  = rescale(Moisture.tolerance,  to = c(0, 1)),
-    Areal.distribution  = rescale(Areal.distribution,  to = c(0, 1))
+    Dietary             = scales::rescale(Dietary,             to = c(0, 1)),
+    Breeding            = scales::rescale(Breeding,            to = c(0, 1)),
+    Wings               = scales::rescale(Wing.morph,          to = c(0, 1)),
+    Bioindication.group = scales::rescale(Bioindication.group, to = c(0, 1)),
+    Moisture.tolerance  = scales::rescale(Moisture.tolerance,  to = c(0, 1)),
+    Areal.distribution  = scales::rescale(Areal.distribution,  to = c(0, 1))
   )
 
 colnames(data_long1)
