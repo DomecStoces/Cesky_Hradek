@@ -75,42 +75,6 @@ dev.off()
 pdf('table.pdf', width=8, height=10)
 plot(four.comb.aravo, alpha = 0.05, stat = "D2")
 dev.off()
-
-################################################################################################################
-#MODEL pro stanovení interakce SpeciesRichness~Movement*Treatment rozdělených do Season!! final!!
-species_richness_data <- final_dataset %>% 
-  group_by(`Time period`, Elevation, Mountain) %>% 
-  summarize(species_richness = n_distinct(Species))
-
-final_dataset2 <- final_dataset %>% 
-  left_join(species_richness_data, by = c("Time period", "Elevation", "Mountain"))
-
-mod <- glmmTMB(species_richness ~ Elevation + Mountain + Temperature + Wind + 
-                 (1 | `Time period`) + (1 | Species),
-               data = final_dataset2, 
-               family = nbinom2(link = "log"))
-
-summary(mod)
-Anova(mod,type = "III")
-
-library(broom.mixed)
-library(ggplot2)
-
-# Tidy the model to get fixed effects with confidence intervals
-tidy_mod <- tidy(mod, effects = "fixed", conf.int = TRUE)
-
-# Plot the estimates and their confidence intervals
-ggplot(tidy_mod, aes(x = term, y = estimate, ymin = conf.low, ymax = conf.high)) +
-  geom_pointrange() +
-  geom_hline(yintercept = 0, linetype = "dashed") +
-  coord_flip() +
-  labs(title = "Fixed Effects Estimates with 95% Confidence Intervals",
-       x = "", y = "Estimate (log scale)")
-
-library(knitr)
-tidy_mod <- tidy(mod, effects = "fixed", conf.int = TRUE)
-kable(tidy_mod, digits = 3, caption = "Model Estimates and 95% Confidence Intervals")
-
 ################################################################################################################
 # Load required libraries
 library(dplyr)
