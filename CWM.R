@@ -204,7 +204,7 @@ cwm_clean <- cwm_results %>%
   filter(!is.na(Altitude), !is.na(Exposition2))
 # Fit Linear Model (LM): Because each locality represented a unique altitudinal step without replication, we used ordinary least squares with heteroscedasticity-consistent (HC3) standard errors rather than mixed-effects or bootstrap model comparison approaches.
 # Because each locality represented a unique altitudinal step without replication, we used ordinary least squares with heteroscedasticity-consistent (HC3) standard errors rather than mixed-effects or bootstrap model comparison approaches.
-mod1 <- lm(Breeding_cwm ~ poly(Altitude, 2, raw = TRUE) + Exposition2,
+mod1 <- lm(Wings_cwm ~ poly(Altitude, 2, raw = TRUE) + Exposition2,
                   data = cwm_clean)
 Anova(mod1,type = "III")
 coeftest(mod1, vcov = sandwich::vcovHC(mod1, type = "HC3"))
@@ -227,14 +227,14 @@ car::crPlots(mod1)                         # component + residual for shape
 # Wings: The community-weighted mean of wing morphology (Wings_cwm) showed a strong nonlinear relationship with altitude (Type III ANOVA: F₂,₇₄ = 22.7, p < 0.001). Both the linear and quadratic terms of altitude remained significant when using heteroskedasticity-robust standard errors (HC3, p < 0.01) and bootstrapped confidence intervals (95% CI: linear −0.0110 to −0.0044; quadratic 3.9×10⁻⁶ to 9.1×10⁻⁶). Although tests indicated non-constant variance (Breusch–Pagan p = 0.022), the effect size and pattern were consistent across robust estimation procedures, supporting a strong altitudinal gradient in wing reduction.
 
 library(corrplot)
-corrplot(cor(cwm_results[, c("Moisture_cwm", "Distribution_cwm")],
+corrplot(cor(cwm_results[, c("Wings_cwm", "Moisture_cwm", "Distribution_cwm")],
              use = "complete.obs"), method = "color", tl.col = "black")
-mod_cwm <- lm(Altitude ~ Moisture_cwm + Distribution_cwm, data = cwm_results)
+mod_cwm <- lm(Altitude ~ Wings_cwm+Moisture_cwm + Distribution_cwm, data = cwm_results)
 vif(mod_cwm)
 
 # Correlation matrix or PCA of CWMs
 # pairwise correlations or perform a PCA on the CWM matrix to see if traits show a shared gradient across sites:
-cwm_mat <- cwm_clean[, c("Moisture_cwm", "Distribution_cwm")]
+cwm_mat <- cwm_clean[, c("Wings_cwm", "Moisture_cwm", "Distribution_cwm")]
 cor(cwm_mat, use = "pairwise.complete.obs", method = "spearman")
 corrplot(cor(cwm_mat), method = "color", tl.col = "black")
 
@@ -257,3 +257,7 @@ mantel(
   permutations = 999
 )
 # Methods: The independence among significant CWMs was tested using a Mantel test (Spearman’s ρ, 999 permutations), which showed no significant correlation between Moisture_cwm and Distribution_cwm (ρ = 0.04, p = 0.17), indicating that the traits describe distinct ecological gradients.
+
+tiff('PCA.tiff', units="in", width=8, height=10, res=600)
+res.pca <- PCA(cwm_mat, graph = TRUE)
+dev.off()
