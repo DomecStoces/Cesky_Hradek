@@ -1,3 +1,5 @@
+data_long1 <- read_excel("data_long1.xlsx")
+
 # Fourth corner analysis
 library(readxl)
 library(ade4)
@@ -84,8 +86,7 @@ library(car)
 library(DHARMa)
 library(ade4)
 library(reshape2)
-library(dplyr)
-library(tibble)  # Load tibble for row name conversion
+library(tibble)
 library(lmtest)
 
 # Community-weighted means (CWMs) were calculated for each trait using species abundance as weights. Ordinal traits (e.g. breeding season, dispersal ability, moisture preference, biogeographic range) were converted to numeric ranks (1–5) reflecting increasing ecological gradients prior to averaging. Continuous traits (body size) were used directly.
