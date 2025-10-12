@@ -224,7 +224,7 @@ cwm_clean <- cwm_results %>%
   filter(!is.na(Altitude), !is.na(Exposition2))
 # Fit Linear Model (LM): Because each locality represented a unique altitudinal step without replication, we used ordinary least squares with heteroscedasticity-consistent (HC3) standard errors rather than mixed-effects or bootstrap model comparison approaches.
 # Because each locality represented a unique altitudinal step without replication, we used ordinary least squares with heteroscedasticity-consistent (HC3) standard errors rather than mixed-effects or bootstrap model comparison approaches.
-mod1 <- lm(Moisture_cwm ~ poly(Altitude, 2, raw = TRUE) + Exposition2,
+mod1 <- lm(Breeding_cwm ~ poly(Altitude, 2, raw = TRUE) + Exposition2,
                   data = cwm_clean)
 Anova(mod1,type = "III")
 coeftest(mod1, vcov = sandwich::vcovHC(mod1, type = "HC3"))
