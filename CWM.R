@@ -204,7 +204,7 @@ cwm_clean <- cwm_results %>%
   filter(!is.na(Altitude), !is.na(Exposition2))
 # Fit Linear Model (LM): Because each locality represented a unique altitudinal step without replication, we used ordinary least squares with heteroscedasticity-consistent (HC3) standard errors rather than mixed-effects or bootstrap model comparison approaches.
 # Because each locality represented a unique altitudinal step without replication, we used ordinary least squares with heteroscedasticity-consistent (HC3) standard errors rather than mixed-effects or bootstrap model comparison approaches.
-mod1 <- lm(Wings_cwm ~ poly(Altitude, 2, raw = TRUE) + Exposition2,
+mod1 <- lm(Moisture_cwm ~ poly(Altitude, 2, raw = TRUE) + Exposition2,
                   data = cwm_clean)
 Anova(mod1,type = "III")
 coeftest(mod1, vcov = sandwich::vcovHC(mod1, type = "HC3"))
@@ -215,7 +215,14 @@ par(mfrow=c(2,2)); plot(mod1)              # residual vs fitted, QQ
 car::ncvTest(mod1)                         # heteroskedasticity
 lmtest::bptest(mod1)                       # Breusch–Pagan = non-constant variance
 car::crPlots(mod1)                         # component + residual for shape
-
+# Spatial autocorrelation
+resid_mod1 <- residuals(mod1)
+coords <- cbind(cwm_clean$Altitude, cwm_clean$Exposition2)
+library(spdep)
+nb <- knn2nb(knearneigh(coords, k = 4))
+lw <- nb2listw(nb, style = "W")
+moran_test <- moran.test(resid_mod1, lw)
+moran_test
 # Interpretation
 # Distribution: The relationship between the community-weighted mean of species’ areal distribution and altitude was significant and unimodal (HC3-corrected linear term: t = −2.30, p = 0.025; quadratic term: t = 2.46, p = 0.016). This indicates that mid-elevation sites tend to host assemblages dominated by species with broader geographic ranges, whereas both low- and high-elevation sites are characterized by species with more restricted distributions. Exposition had no detectable influence (p = 0.90*)
 # the negative association in the linear term indicates that with increasing altitude there are fewer European species followed by an upward curvature suggesting that the most widespread (Palearctic or Holoarctic) taxa occur at the highest elevations.
@@ -226,6 +233,7 @@ car::crPlots(mod1)                         # component + residual for shape
 
 # Wings: The community-weighted mean of wing morphology (Wings_cwm) showed a strong nonlinear relationship with altitude (Type III ANOVA: F₂,₇₄ = 22.7, p < 0.001). Both the linear and quadratic terms of altitude remained significant when using heteroskedasticity-robust standard errors (HC3, p < 0.01) and bootstrapped confidence intervals (95% CI: linear −0.0110 to −0.0044; quadratic 3.9×10⁻⁶ to 9.1×10⁻⁶). Although tests indicated non-constant variance (Breusch–Pagan p = 0.022), the effect size and pattern were consistent across robust estimation procedures, supporting a strong altitudinal gradient in wing reduction.
 
+# Correlation among CWMs 
 library(corrplot)
 corrplot(cor(cwm_results[, c("Wings_cwm", "Moisture_cwm", "Distribution_cwm")],
              use = "complete.obs"), method = "color", tl.col = "black")
@@ -261,3 +269,8 @@ mantel(
 tiff('PCA.tiff', units="in", width=8, height=10, res=600)
 res.pca <- PCA(cwm_mat, graph = TRUE)
 dev.off()
+
+# Graphical representation of the relationship between Altitude and CWMs
+library(ggplot2)
+ggplot(cwm_clean, aes(Altitude, Distribution_cwm)) +
+  geom_point() + geom_smooth(method = "gam", formula = y ~ s(x, k = 4))
