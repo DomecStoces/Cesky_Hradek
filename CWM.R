@@ -24,7 +24,7 @@ fourth_corner$env <- fourth_corner$env %>%
     Altitude_scaled2 = Altitude_scaled^2
   )
 fourth_corner$env <- fourth_corner$env %>%
-  select(-Altitude) %>%   # remove the raw one
+  select(-Altitude) %>%   
   relocate(Altitude_scaled, Altitude_scaled2, .after = Wind)
 
 fourth_corner$traits <- as.data.frame(fourth_corner$traits)
@@ -76,50 +76,6 @@ pdf('table.pdf', width=8, height=10)
 plot(four.comb.aravo, alpha = 0.05, stat = "D2")
 dev.off()
 
-# Linear models with CWMs as response variables
-library(dplyr)
-library(ade4)
-library(lme4)
-library(glmmTMB)
-library(MASS)
-library(car)
-library(emmeans)
-
-final_dataset$`Time period` <- as.numeric(final_dataset$`Time period`)
-final_dataset$Elevation <- as.numeric(final_dataset$Elevation)
-
-group_stats <- final_dataset %>%
-  summarise(
-    Mean_Number = mean(Number),
-    Variance_Number = var(Number),
-    Overdispersion = Variance_Number / Mean_Number
-  )
-
-group_stats
-
-# Fit a Poisson GLM
-poisson_model <- glmer(Number ~ Elevation + Mountain + Wingspan*Dietary+(1|`Time period`)+(1|Species), data = final_dataset,family = poisson(link="log"))
-
-summary(poisson_model)
-
-# Calculate the Pearson chi-square statistic
-resid_dev <- sum(residuals(poisson_model, type = "pearson")^2)
-resid_df <- df.residual(poisson_model)
-
-overdispersion_ratio <- resid_dev / resid_df
-overdispersion_ratio
-
-nb_model <- glmmTMB(
-  Number ~ Elevation + Temperature+ Wind +Mountain+ (1 | `Time period`) + (1 | Species),
-  data = final_dataset, family = nbinom2(link = "log"))
-summary(nb_model)
-
-Anova(nb_model, type = "III")
-
-library(knitr)
-tidy_mod <- tidy(nb_model, effects = "fixed", conf.int = TRUE)
-kable(tidy_mod, digits = 3, caption = "Model Estimates and 95% Confidence Intervals")
-
 ################################################################################################################
 #MODEL pro stanovení interakce SpeciesRichness~Movement*Treatment rozdělených do Season!! final!!
 species_richness_data <- final_dataset %>% 
@@ -158,6 +114,7 @@ kable(tidy_mod, digits = 3, caption = "Model Estimates and 95% Confidence Interv
 ################################################################################################################
 # Load required libraries
 library(dplyr)
+library(scales)
 library(lme4)
 library(car)
 library(DHARMa)
@@ -165,107 +122,158 @@ library(ade4)
 library(reshape2)
 library(dplyr)
 library(tibble)  # Load tibble for row name conversion
+library(lmtest)
+
+# Community-weighted means (CWMs) were calculated for each trait using species abundance as weights. Ordinal traits (e.g. breeding season, dispersal ability, moisture preference, biogeographic range) were converted to numeric ranks (1–5) reflecting increasing ecological gradients prior to averaging. Continuous traits (body size) were used directly.
 
 data_long1 <- data_long1 %>%
   mutate(
     # Dietary
-    Dietary = recode(Dietary,
+    Dietary = dplyr::recode(trimws(Dietary),
                      "Predator" = 1,
                      "Granivor" = 2,
-                     "Omnivor" = 3),
+                     "Granivore" = 2,  # in case of spelling variation
+                     "Omnivor" = 3,
+                     "Omnivore" = 3),
     
     # Breeding
-    Breeding = recode(Breeding,
+    Breeding = dplyr::recode(trimws(Breeding),
                       "Spring" = 1,
                       "Autumn" = 2),
     
     # Wings
-    Wings = recode(Wings,
-                   "B" = 1,      
-                   "M" = 2),
+    Wings = dplyr::recode(trimws(Wings),
+                   "B" = 1,  # brachypterous
+                   "M" = 2), # macropterous
+    
+    # Bioindication group
+    Bioindication.group = dplyr::recode(trimws(Bioindication.group),
+                                 "E" = 1,
+                                 "A" = 2,
+                                 "R" = 3),
     
     # Moisture tolerance
-    Moisture.tolerance = recode(Moisture.tolerance,
-                                "X" = 1,  
-                                "S" = 2,  
-                                "I" = 3,  
-                                "V" = 4,  
-                                "H" = 5), 
+    Moisture.tolerance = dplyr::recode(trimws(Moisture.tolerance),
+                                "X" = 1,
+                                "S" = 2,
+                                "I" = 3,
+                                "V" = 4,
+                                "H" = 5),
     
     # Areal distribution
-    Areal.distribution = recode(Areal.distribution,
-                                "Central Europe"     = 1,
-                                "Europe"             = 2,
-                                "West Palearctic"    = 2,
-                                "South Palearctic"   = 2,
-                                "Eurasian"           = 3,
-                                "Eurosiberian"       = 3,
-                                "Palearctic"         = 4,
-                                "North Palearctic"   = 4,
-                                "Transpalearctic"    = 4,
-                                "Circumboreal"       = 4,
-                                "Holoarctic"         = 4),
+    Areal.distribution = dplyr::recode(trimws(Areal.distribution),
+                                "Central Europe"   = 1,
+                                "Europe"           = 2,
+                                "West Palearctic"  = 2,
+                                "South Palearctic" = 2,
+                                "Eurasian"         = 3,
+                                "Eurosiberian"     = 3,
+                                "Palearctic"       = 4,
+                                "North Palearctic" = 4,
+                                "Transpalearctic"  = 4,
+                                "Circumboreal"     = 4,
+                                "Holoarctic"       = 4),
     
-    # Body.size
+    # Body size
     Body.size = as.numeric(Body.size)
+  ) %>%
+  mutate(
+    Dietary             = rescale(Dietary,             to = c(0, 1)),
+    Breeding            = rescale(Breeding,            to = c(0, 1)),
+    Wings               = rescale(Wings,               to = c(0, 1)),
+    Bioindication.group = rescale(Bioindication.group, to = c(0, 1)),
+    Moisture.tolerance  = rescale(Moisture.tolerance,  to = c(0, 1)),
+    Areal.distribution  = rescale(Areal.distribution,  to = c(0, 1))
   )
 
 colnames(data_long1)
 
-cwm_results <- final_dataset %>%
-  group_by(Elevation, Mountain) %>%
+cwm_results <- data_long1 %>%
+  group_by(Year, Locality) %>%
   summarize(
-    Dietary_cwm = weighted.mean(Dietary, Number, na.rm = TRUE),
-    Red_list_cwm = weighted.mean(`Red list species`, Number, na.rm = TRUE),
-    Body_cwm = weighted.mean(Body.size, Number, na.rm = TRUE),
-    Distribution_cwm = weighted.mean(Areal.distribution, Number, na.rm = TRUE),
-    Host_species_cwm = weighted.mean(`Host species`, Number, na.rm = TRUE),
-    Leaf_action_cwm = weighted.mean(`Leaf action`, Number, na.rm = TRUE),Abundance=sum(Number)
+    Dietary_cwm        = weighted.mean(Dietary, Count, na.rm = TRUE),
+    Breeding_cwm       = weighted.mean(Breeding, Count, na.rm = TRUE),
+    Wings_cwm          = weighted.mean(Wings, Count, na.rm = TRUE),
+    Bioindication_cwm  = weighted.mean(Bioindication.group, Count, na.rm = TRUE),
+    Moisture_cwm       = weighted.mean(Moisture.tolerance, Count, na.rm = TRUE),
+    Body_cwm           = weighted.mean(Body.size, Count, na.rm = TRUE),
+    Distribution_cwm   = weighted.mean(Areal.distribution, Count, na.rm = TRUE),
+    Abundance          = sum(Count),
+    .groups = "drop"
   )
-
 # Display results
 print(cwm_results)
 
-# Save results to a CSV file
-write.csv(cwm_results, "cwm_results.csv", row.names = FALSE)
-
-# Convert categorical variables to factors
-cwm_results <- cwm_results %>%
-  mutate(Mountain = as.factor(Mountain),
-         `Time period` = as.factor(`Time period`))
-
 # Center and scale Altitude
 data_long1 <- data_long1 %>%
-  mutate(Altitude_scaled = scale(Altitude, center = TRUE, scale = TRUE),
-         Altitude_scaled2 = Altitude_scaled^2)
-
-# Fit Generalized Linear Mixed Model (GLMM)
-mod1 <- lm(Distribution_cwm ~ poly(Altitude, 2, scale = TRUE) + Exposition2,
-           data = cwm_results)
+  mutate(
+    Altitude_scaled  = as.numeric(scale(Altitude, center = TRUE, scale = TRUE)),
+    Altitude_scaled2 = Altitude_scaled^2)
+env_site <- data_long1 %>%
+  group_by(Year, Locality) %>%
+  summarise(
+    Altitude        = mean(Altitude, na.rm = TRUE),
+    Altitude_scaled = mean(Altitude_scaled, na.rm = TRUE),
+    Altitude_scaled2 = mean(Altitude_scaled2, na.rm = TRUE),
+    Exposition2     = mean(Exposition2, na.rm = TRUE),
+    .groups = "drop"
+  )
+cwm_results <- cwm_results %>%
+  left_join(env_site, by = c("Year", "Locality"))
+cwm_clean <- cwm_results %>%
+  filter(!is.na(Altitude), !is.na(Exposition2))
+# Fit Linear Model (LM): Because each locality represented a unique altitudinal step without replication, we used ordinary least squares with heteroscedasticity-consistent (HC3) standard errors rather than mixed-effects or bootstrap model comparison approaches.
+# Because each locality represented a unique altitudinal step without replication, we used ordinary least squares with heteroscedasticity-consistent (HC3) standard errors rather than mixed-effects or bootstrap model comparison approaches.
+mod1 <- lm(Moisture_cwm ~ poly(Altitude, 2, raw = TRUE) + Exposition2,
+                  data = cwm_clean)
 Anova(mod1,type = "III")
+coeftest(mod1, vcov = sandwich::vcovHC(mod1, type = "HC3"))
+# Parametric bootstrap implemented via resampling residuals
+confint(mod1, method = "boot", nsim = 1999)
+# Diagnosis for lm()= assumptions of linear modeling needs to be satisfied, no significant non-normality or variance heterogeneity
+par(mfrow=c(2,2)); plot(mod1)              # residual vs fitted, QQ
+car::ncvTest(mod1)                         # heteroskedasticity
+lmtest::bptest(mod1)                       # Breusch–Pagan = non-constant variance
+car::crPlots(mod1)                         # component + residual for shape
 
-confint(mod1, method = "boot", nsim = 999)
+# Interpretation
+# Distribution: The relationship between the community-weighted mean of species’ areal distribution and altitude was significant and unimodal (HC3-corrected linear term: t = −2.30, p = 0.025; quadratic term: t = 2.46, p = 0.016). This indicates that mid-elevation sites tend to host assemblages dominated by species with broader geographic ranges, whereas both low- and high-elevation sites are characterized by species with more restricted distributions. Exposition had no detectable influence (p = 0.90*)
+# the negative association in the linear term indicates that with increasing altitude there are fewer European species followed by an upward curvature suggesting that the most widespread (Palearctic or Holoarctic) taxa occur at the highest elevations.
 
+
+# Body size: The model detects some altitude-related structure overall, but it’s weak and not robust at the individual term level.
+# Although the overall ANOVA indicated a marginal effect of altitude on the community-weighted mean body size (F₂,₇₄ = 3.25, p = 0.044), heteroscedasticity-robust standard errors and bootstrapped confidence intervals showed that neither the linear nor quadratic terms were individually significant (p > 0.5). Therefore, no consistent altitudinal pattern in body size CWM was detected.
+
+# Wings: The community-weighted mean of wing morphology (Wings_cwm) showed a strong nonlinear relationship with altitude (Type III ANOVA: F₂,₇₄ = 22.7, p < 0.001). Both the linear and quadratic terms of altitude remained significant when using heteroskedasticity-robust standard errors (HC3, p < 0.01) and bootstrapped confidence intervals (95% CI: linear −0.0110 to −0.0044; quadratic 3.9×10⁻⁶ to 9.1×10⁻⁶). Although tests indicated non-constant variance (Breusch–Pagan p = 0.022), the effect size and pattern were consistent across robust estimation procedures, supporting a strong altitudinal gradient in wing reduction.
+
+library(corrplot)
+corrplot(cor(cwm_results[, c("Moisture_cwm", "Distribution_cwm")],
+             use = "complete.obs"), method = "color", tl.col = "black")
+mod_cwm <- lm(Altitude ~ Moisture_cwm + Distribution_cwm, data = cwm_results)
+vif(mod_cwm)
+
+# Correlation matrix or PCA of CWMs
+# pairwise correlations or perform a PCA on the CWM matrix to see if traits show a shared gradient across sites:
+cwm_mat <- cwm_clean[, c("Moisture_cwm", "Distribution_cwm")]
+cor(cwm_mat, use = "pairwise.complete.obs", method = "spearman")
+corrplot(cor(cwm_mat), method = "color", tl.col = "black")
+
+# or PCA
+library(FactoMineR)
+res.pca <- PCA(cwm_mat, graph = TRUE)
+
+# How CWMs jointly respond to environment?
+# the overall trait–environment concordance
 library(vegan)
-d <- dist(cwm_results$Distribution_cwm)
-mod2 <- adonis2(d ~ Elevation, data = cwm_results,permutations = 999)
-print(mod2)
+rda_cwm <- rda(cwm_mat ~ Altitude + Exposition2, data = cwm_clean)
+anova(rda_cwm, permutations = 999)
+anova(rda_cwm, by = "axis", permutations = 999)
 
-
-#####
-library(pbkrtest)
-
-# Full model (with all predictors)
-mod1 <- lm(Dietary_cwm ~ Elevation + Mountain, data = cwm_results)
-
-# Reduced model (without 'Mountain')
-mod0 <- lm(Dietary_cwm ~ Mountain, data = cwm_results)
-
-# Run parametric bootstrap test
-pb <- PBmodcomp(mod1, mod0, nsim = 999)
-
-# Print results
-summary(pb)
-
-isSingular(mod1) #if random are properly estimated and does not collapse to zero variance
-VarCorr(mod1) #what variance Time period has
+# Mantel test of two CWMs
+mantel(
+  dist(cwm_clean$Moisture_cwm),
+  dist(cwm_clean$Distribution_cwm),
+  method = "spearman",
+  permutations = 999
+)
+# Methods: The independence among significant CWMs was tested using a Mantel test (Spearman’s ρ, 999 permutations), which showed no significant correlation between Moisture_cwm and Distribution_cwm (ρ = 0.04, p = 0.17), indicating that the traits describe distinct ecological gradients.
