@@ -1,102 +1,91 @@
 library(dplyr)
 library(stringr)
 library(ape)
-library(phytools)
+library(brms)
+library(scales)
 
-# tax_df must contain: Species, genus, family, superfamily
+# Create pseudo-phylogenetic tree based on taxonomy
 tax_df <- data_long1 %>%
   distinct(Species) %>%
   mutate(
-    genus = stringr::word(Species, 1, sep = "_"),
+    genus = str_extract(Species, "^[^_]+"),
     family = "Carabidae",
     superfamily = "Caraboidea"
   ) %>%
   mutate(across(c(Species, genus, family, superfamily), as.factor))
 
-# Check structure
-str(tax_df)
-
-# Build hierarchical tree
 carab_tree <- as.phylo(~ superfamily / family / genus / Species, data = tax_df)
-
-# Ensure fully dichotomous
-carab_tree <- multi2di(carab_tree)
-
-# Add branch lengths (Grafen’s method)
-carab_tree <- compute.brlen(carab_tree, method = "Grafen")
-
-sp_keep <- intersect(unique(data_long1$Species), carab_tree$tip.label)
-
-data_phy <- data_long1 %>%
-  filter(Species %in% sp_keep)
-
-carab_tree <- drop.tip(carab_tree, setdiff(carab_tree$tip.label, sp_keep))
-
-# Confirm alignment
-all(unique(data_phy$Species) %in% carab_tree$tip.label)
-
-library(phyr)
-
-m_pglmm <- pglmm(
-  Count ~ 1 + Altitude_scaled + Exposition2,
-  data   = data_phy,
-  family = "nbinomial",                             
-  cov_ranef = list(Species = carab_tree),
-  random = ~ 1 | Locality + 1 | Species__@phylo,
-  bayes = TRUE,
-  REML  = TRUE
-)
-
-summary(m_pglmm)
-
-# Variance explained by phylogenetic random effect
-ranef_summary(m_pglmm)$var["Species__@phylo"]
-
-# Create tree from taxonomic hierarchy
-carab_tree <- as.phylo(~ superfamily / family / genus / Species, data = tax_df)
-
-# Make sure tree is fully dichotomous and has branch lengths
 carab_tree <- multi2di(carab_tree)
 carab_tree <- compute.brlen(carab_tree, method = "Grafen")
 
-# Optional: visualize and check labels
-plot(carab_tree, cex = 0.5)
-head(carab_tree$tip.label)
-
-# Align species between data_long1 and tree
+# Align with dataset
 sp_keep <- intersect(unique(data_long1$Species), carab_tree$tip.label)
 data_phy <- data_long1 %>% filter(Species %in% sp_keep)
 carab_tree <- drop.tip(carab_tree, setdiff(carab_tree$tip.label, sp_keep))
 
-# Confirm alignment
-all(unique(data_phy$Species) %in% carab_tree$tip.label)
+# Covariance matrix
+vcv_mat <- vcv(carab_tree, corr = FALSE)
+data_phy$Species <- factor(data_phy$Species, levels = rownames(vcv_mat))
 
-m_pglmm <- pglmm(
-  Count ~ 1 + Altitude_scaled + Exposition2,     # fixed effects
-  data   = data_phy,
-  family = "poisson",                            # or "nbinomial" for overdispersion
-  cov_ranef = list(Species = carab_tree),        # tree-based covariance
-  random = ~ 1 | Locality + 1 | Species__@phylo, # site RE + species phylo RE
-  bayes = TRUE,
-  REML  = TRUE
+# Aggregate by Year × Locality × Species for CWM modelling
+cwm_species <- data_phy %>%
+  group_by(Year, Locality, Species) %>%
+  summarise(
+    # Trait CWMs (species-weighted means per Year × Locality × Species)
+    Dietary_cwm        = weighted.mean(Dietary, Count, na.rm = TRUE),
+    Breeding_cwm       = weighted.mean(Breeding, Count, na.rm = TRUE),
+    Wings_cwm          = weighted.mean(Wing.morph, Count, na.rm = TRUE),
+    Bioindication_cwm  = weighted.mean(Bioindication.group, Count, na.rm = TRUE),
+    Moisture_cwm       = weighted.mean(Moisture.tolerance, Count, na.rm = TRUE),
+    Body_cwm           = weighted.mean(Body.size, Count, na.rm = TRUE),
+    Distribution_cwm   = weighted.mean(Areal.distribution, Count, na.rm = TRUE),
+    
+    # Abundance and environment
+    Count        = sum(Count),
+    Altitude     = mean(Altitude, na.rm = TRUE),
+    Exposition2  = mean(Exposition2, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    Altitude_scaled  = scale(Altitude, center = TRUE, scale = TRUE)[,1],
+    Altitude_scaled2 = Altitude_scaled^2
+  )
+
+# BRMS model: CWM Moisture with phylogenetic random effects
+n <- nrow(cwm_species)
+cwm_species <- cwm_species %>%
+  mutate(
+    Distribution_cwm = (Distribution_cwm * (n - 1) + 0.5) / n
+  )
+brm_CWM_Distribution <- brm(
+  bf(Distribution_cwm ~ poly(Altitude_scaled, 2, raw = TRUE) + Exposition2 +
+       (1 | gr(Species, cov = vcv_mat)) + (1 | Locality)),
+  data   = cwm_species,
+  data2  = list(vcv_mat = vcv_mat),
+  family = Beta(link = "logit"),
+  chains = 4, cores = 4, iter = 4000,
+  control = list(adapt_delta = 0.95),
+  seed = 1234
 )
 
-summary(m_pglmm)
-
-# Extract variance explained by phylogeny
-ranef_summary(m_pglmm)$var["Species__@phylo"]
-
-m_glmm <- pglmm(
-  Count ~ 1 + Altitude_scaled + Exposition2,
-  data = data_phy,
-  family = "poisson",
-  random = ~ 1 | Locality + 1 | Species,   # species RE, no phylo link
-  bayes = TRUE,
-  REML  = TRUE
+brm_CWM_Moisture <- brm(
+  bf(Moisture_cwm ~ poly(Altitude_scaled, 2, raw = TRUE) + Exposition2 +
+       (1 | gr(Species, cov = vcv_mat)) + (1 | Locality)),
+  data   = cwm_species,
+  data2  = list(vcv_mat = vcv_mat),
+  family = gaussian(link = "identity"),
+  chains = 4, cores = 4, iter = 4000,
+  control = list(adapt_delta = 0.95),
+  seed = 1234
 )
 
-AIC(m_glmm, m_pglmm)
-
-plot(m_pglmm)                     # residuals/fitted check
-hist(ranef(m_pglmm)$Species__@phylo)  # distribution of phylogenetic REs
-
+brm_CWM_Wings <- brm(
+  bf(Wings_cwm ~ poly(Altitude_scaled, 2, raw = TRUE) + Exposition2 +
+       (1 | gr(Species, cov = vcv_mat)) + (1 | Locality)),
+  data   = cwm_species,
+  data2  = list(vcv_mat = vcv_mat),
+  family = gaussian(link = "identity"),
+  chains = 4, cores = 4, iter = 4000,
+  control = list(adapt_delta = 0.95),
+  seed = 1234
+)
