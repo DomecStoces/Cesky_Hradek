@@ -259,8 +259,8 @@ anova(rda_cwm, by = "axis", permutations = 999)
 
 # Mantel test of two CWMs
 mantel(
-  dist(cwm_clean$Moisture_cwm),
   dist(cwm_clean$Distribution_cwm),
+  dist(cwm_clean$Wings_cwm),
   method = "spearman",
   permutations = 999
 )
