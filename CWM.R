@@ -204,8 +204,9 @@ cwm_clean <- cwm_results %>%
   filter(!is.na(Altitude), !is.na(Exposition2))
 # Fit Linear Model (LM): Because each locality represented a unique altitudinal step without replication, we used ordinary least squares with heteroscedasticity-consistent (HC3) standard errors rather than mixed-effects or bootstrap model comparison approaches.
 # Because each locality represented a unique altitudinal step without replication, we used ordinary least squares with heteroscedasticity-consistent (HC3) standard errors rather than mixed-effects or bootstrap model comparison approaches.
-mod1 <- lm(Moisture_cwm ~ poly(Altitude, 2, raw = TRUE) + Exposition2,
+mod1 <- lm(Distribution_cwm ~ poly(Altitude, 2, raw = TRUE) + Exposition2,
                   data = cwm_clean)
+res1 <- residuals(mod1)
 Anova(mod1,type = "III")
 coeftest(mod1, vcov = sandwich::vcovHC(mod1, type = "HC3"))
 # Parametric bootstrap implemented via resampling residuals
@@ -215,14 +216,38 @@ par(mfrow=c(2,2)); plot(mod1)              # residual vs fitted, QQ
 car::ncvTest(mod1)                         # heteroskedasticity
 lmtest::bptest(mod1)                       # Breusch–Pagan = non-constant variance
 car::crPlots(mod1)                         # component + residual for shape
+
 # Spatial autocorrelation
-resid_mod1 <- residuals(mod1)
-coords <- cbind(cwm_clean$Altitude, cwm_clean$Exposition2)
 library(spdep)
-nb <- knn2nb(knearneigh(coords, k = 4))
-lw <- nb2listw(nb, style = "W")
-moran_test <- moran.test(resid_mod1, lw)
-moran_test
+
+# A) Within each year (no duplicate coords inside a year)
+years <- levels(cwm_clean$Year)
+out <- lapply(years, function(y){
+  dat <- subset(cwm_clean, Year == y)
+  coords <- as.matrix(dat[, c("X","Y")])
+  nb  <- knn2nb(knearneigh(coords, k = 4))
+  lw  <- nb2listw(nb, style = "W")
+  moran.test(res1[ cwm_clean$Year == y ], lw)
+})
+names(out) <- years
+out
+# B) Aggregate to unique sites (one value per locality)
+agg <- cwm_clean |>
+  mutate(res1 = res1) |>
+  group_by(Locality) |>
+  summarise(X = mean(X), Y = mean(Y), res1 = mean(res1), .groups="drop")
+
+coords <- as.matrix(agg[, c("X","Y")])
+nb  <- knn2nb(knearneigh(coords, k = 4))
+lw  <- nb2listw(nb, style = "W")
+moran.test(agg$res1, lw)
+
+# cluster-robust SEs (by Locality) to safeguard against any residual within-site correlation
+library(clubSandwich)
+library(lmtest)
+V <- vcovCR(mod1, cluster = cwm_clean$Locality, type = "CR2")
+coef_test(mod1, vcov = V)
+
 # Interpretation
 # Distribution: The relationship between the community-weighted mean of species’ areal distribution and altitude was significant and unimodal (HC3-corrected linear term: t = −2.30, p = 0.025; quadratic term: t = 2.46, p = 0.016). This indicates that mid-elevation sites tend to host assemblages dominated by species with broader geographic ranges, whereas both low- and high-elevation sites are characterized by species with more restricted distributions. Exposition had no detectable influence (p = 0.90*)
 # the negative association in the linear term indicates that with increasing altitude there are fewer European species followed by an upward curvature suggesting that the most widespread (Palearctic or Holoarctic) taxa occur at the highest elevations.
@@ -242,7 +267,7 @@ vif(mod_cwm)
 
 # Correlation matrix or PCA of CWMs
 # pairwise correlations or perform a PCA on the CWM matrix to see if traits show a shared gradient across sites:
-cwm_mat <- cwm_clean[, c("Wings_cwm", "Moisture_cwm", "Distribution_cwm")]
+cwm_mat <- cwm_clean[, c("Moisture_cwm", "Wings_cwm")]
 cor(cwm_mat, use = "pairwise.complete.obs", method = "spearman")
 corrplot(cor(cwm_mat), method = "color", tl.col = "black")
 
@@ -259,7 +284,7 @@ anova(rda_cwm, by = "axis", permutations = 999)
 
 # Mantel test of two CWMs
 mantel(
-  dist(cwm_clean$Distribution_cwm),
+  dist(cwm_clean$Moisture_cwm),
   dist(cwm_clean$Wings_cwm),
   method = "spearman",
   permutations = 999
@@ -272,5 +297,5 @@ dev.off()
 
 # Graphical representation of the relationship between Altitude and CWMs
 library(ggplot2)
-ggplot(cwm_clean, aes(Altitude, Distribution_cwm)) +
+ggplot(cwm_clean, aes(Altitude, Wings_cwm)) +
   geom_point() + geom_smooth(method = "gam", formula = y ~ s(x, k = 4))
