@@ -71,9 +71,9 @@ k_xy <- max(6, min(10, nrow(dplyr::distinct(df, X_km, Y_km)) - 1))
 
 # GAM: simpler polynomial representation is preferred for interpretability and model parsimony than smooth term of Altitude.
 mod_gam1 <- gam(
-  Wings_cwm ~ s(X_km, Y_km, bs = "tp", k = k_xy) +
+  Moisture_cwm ~ s(X_km, Y_km, bs = "tp", k = k_xy) +
     Altitude_scaled + Altitude_scaled2 +  
-    Exposition2 + Year +
+    Exposition2 +
     s(Locality, bs = "re"),
   data   = df,
   method = "REML"
@@ -84,32 +84,69 @@ library(DHARMa)
 sim <- simulateResiduals(fittedModel = mod_gam1, n = 1000, seed = 1)
 plot(sim)
 
-vis.gam(mod_gam2, view = c("X_km", "Y_km"),
-        plot.type = "contour", color = "terrain",
-        too.far = 0.05, n.grid = 100)
-
-vis.gam(mod_gam1, view = c("X_km", "Y_km"),
-        plot.type = "persp", color = "topo",
-        phi = 30, theta = 30)
-
+tiff('DHARMa_Wings.tiff', units = "in", width = 8, height = 10, res = 600)
+plot(sim)
+dev.off()
+# Plotting the effect of Altitude_scaled on CWM traits from mod_gam1
 library(gratia)
+library(dplyr)
+library(tidyr)
 library(ggplot2)
 
-draw(mod_gam2, select = "s(X_km,Y_km)") +
-  labs(fill = "Partial effect") +
-  theme_bw()
+# Terms to exclude
+excl <- c("s(Locality)", "s(X_km,Y_km)")
 
-draw(mod_gam2, select = "s(Altitude)") +
-  labs(y = "Partial effect", x = "Altitude (m a.s.l.)") +
-  theme_bw()
+# 1) Grid for the line/ribbon
+tv <- typical_values(mod_gam1)
+alt_seq <- seq(min(df$Altitude_scaled, na.rm = TRUE),
+               max(df$Altitude_scaled, na.rm = TRUE), length.out = 100)
 
-# If you refit mod_gam2 with s(Altitude, k = 5):
-library(gratia)
+tv2 <- dplyr::select(tv, -any_of(c("Altitude_scaled","Altitude_scaled2")))
+new_data <- tidyr::crossing(tv2, tibble(Altitude_scaled = alt_seq)) %>%
+  mutate(Altitude_scaled2 = Altitude_scaled^2)
 
-draw(mod_gam1, select = "s(Altitude)") +
-  labs(
-    x = "Altitude (m a.s.l.)",
-    y = "Partial effect on Wing CWM",
-    title = "Modelled altitude effect (smooth representation)"
-  ) +
-  theme_bw()
+# 2) Fitted line/ribbon on response scale
+fv <- fitted_values(mod_gam1, data = new_data, exclude = excl,
+                    scale = "response", se = TRUE) %>%
+  dplyr::rename(fitted = any_of(c("fitted",".fitted","fit")),
+                se     = any_of(c("se",".se"))) %>%
+  mutate(lower = fitted - 1.96 * se,
+         upper = fitted + 1.96 * se)
+
+# 3) Partial points aligned with exclusions
+fv_obs <- fitted_values(mod_gam1, data = df, exclude = excl,
+                        scale = "response", se = FALSE) %>%
+  dplyr::rename(fitted = any_of(c("fitted",".fitted","fit")))
+
+df$partial_excl <- residuals(mod_gam1, type = "response") + fv_obs$fitted
+
+p <- ggplot() +
+  geom_ribbon(data = fv,
+              aes(x = Altitude_scaled, ymin = lower, ymax = upper),
+              fill = "grey70", alpha = 0.35) +
+  geom_line(data = fv,
+            aes(x = Altitude_scaled, y = fitted), linewidth = 1.1) +
+  geom_jitter(data = df,
+              aes(x = Altitude_scaled, y = partial_excl),
+              width = 0.03, height = 0, size = 1.8, alpha = 0.6) +
+  labs(x = "Altitude (scaled)", y = "Moisture preferences CWM") +
+  scale_x_continuous(breaks = seq(-2, 2, 1), minor_breaks = NULL) +
+  scale_y_continuous(breaks = scales::pretty_breaks(5),
+                     expand = expansion(mult = c(0, 0.02))) +
+  theme(
+    panel.background = element_blank(),
+    plot.background  = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.line        = element_line(colour = "black", linewidth = 0.6),
+    axis.ticks       = element_line(colour = "black", linewidth = 0.5),
+    axis.ticks.length= unit(4, "pt"),
+    axis.title       = element_text(size = 15),
+    axis.text        = element_text(colour = "black", size = 11),
+    plot.margin      = margin(6, 8, 6, 6)
+  )
+p
+tiff('GAM_Moisture.tiff', units = "in", width = 8, height = 10, res = 600)
+print(p)
+dev.off()
+
