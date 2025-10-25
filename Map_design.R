@@ -3,7 +3,7 @@ library(stringr)
 library(sf)
 library(leaflet)
 
-# Locality + DMS strings
+# Include Altitude in your tibble
 dat_raw <- tibble::tribble(
   ~Locality, ~dms,
   1,  "50°32'30.05\"N, 13°26'28.39\"E",
@@ -147,8 +147,8 @@ p_cz_detail <- ggplot() +
   geom_sf(data = line_win, color = "grey40", linewidth = 0.5) +
   geom_sf(data = pts_win,  size = 2.2, color = "black") +
   ggrepel::geom_label_repel(
-    data = cbind(pts_win, st_coordinates(pts_win)),
-    aes(X, Y, label = Locality),
+    data = cbind(sf::st_drop_geometry(pts_win), sf::st_coordinates(pts_win)),
+    aes(X, Y, label = sprintf("%s", Locality)),
     size = 2.6, label.size = 0.15, label.padding = unit(0.08, "lines")
   ) +
   coord_sf(xlim = c(bb_exp["xmin"], bb_exp["xmax"]),
