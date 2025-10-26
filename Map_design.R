@@ -177,7 +177,7 @@ pdf("p_central_labels.pdf", width = 8, height = 10)
 p_central_labels
 dev.off()
 #####
-# B panel
+# B panel with square in Czech republic
 #####
 # Download basemaps
 eu <- ne_countries(scale = "medium", continent = "Europe", returnclass = "sf")
@@ -188,17 +188,41 @@ cz_p  <- st_transform(cz, crs_plot)
 pts_p <- st_transform(pts, crs_plot)
 
 eu
-theme_map <- theme_void() +
-  theme(plot.title = element_text(hjust = 0, face = "bold"))
+# Use the centroid of your sites as before
 center_p <- st_centroid(st_union(pts_p))
-radius_km <- 35
-circle_p <- st_buffer(center_p, dist = radius_km * 1000)
 
+# Define half-size of the square (in km)
+half_size_km <- 35     # adjust as needed
+half_size_m  <- half_size_km * 1000
+
+# Convert center to numeric coordinates
+cx <- st_coordinates(center_p)[1,1]
+cy <- st_coordinates(center_p)[1,2]
+
+# Create a square polygon centered on the site cluster
+square_mat <- matrix(c(
+  cx - half_size_m, cy - half_size_m,
+  cx + half_size_m, cy - half_size_m,
+  cx + half_size_m, cy + half_size_m,
+  cx - half_size_m, cy + half_size_m,
+  cx - half_size_m, cy - half_size_m
+), ncol = 2, byrow = TRUE)
+
+square_p <- st_polygon(list(square_mat)) |> 
+  st_sfc(crs = st_crs(pts_p))
+
+# Czech overview map with square highlight
 p_cz_overview <- ggplot() +
   geom_sf(data = cz_p, fill = "grey95", color = "grey50", linewidth = 0.25) +
-  geom_sf(data = circle_p, fill = "grey70", color = "grey30", alpha = 0.25, linewidth = 0.4) +
-  coord_sf(expand = FALSE) +
-  theme_map
+  geom_sf(data = square_p, fill = "grey70", color = "grey30", alpha = 0.3, linewidth = 0.4) +
+  theme_void()
+tiff('p_cz_overview.tiff', units = "in", width = 8, height = 10, res = 600)
+p_cz_overview
+dev.off()
+
+pdf("p_cz_overview.pdf", width = 8, height = 10)
+p_cz_overview
+dev.off()
 #####
 # B panel with describtions
 #####
@@ -244,6 +268,6 @@ tiff('p_cz_overview.tiff', units = "in", width = 8, height = 10, res = 600)
 p_cz_overview
 dev.off()
 
-pdf("p_cz_overview.pdf", width = 8, height = 10)
-p_cz_overview
+pdf("p_cz_detail.pdf", width = 8, height = 10)
+p_cz_detail
 dev.off()
