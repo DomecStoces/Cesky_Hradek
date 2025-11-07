@@ -95,28 +95,28 @@ data_long1 <- data_long1 %>%
   mutate(
     # Dietary
     Dietary = dplyr::recode(trimws(Dietary),
-                            "Predator" = 1,
-                            "Granivor" = 2,
+                            "Predator"  = 1,
+                            "Granivor"  = 2,
                             "Granivore" = 2,
-                            "Omnivor" = 3,
-                            "Omnivore" = 3,
-                            .default = NA_real_
+                            "Omnivor"   = 3,
+                            "Omnivore"  = 3,
+                            .default    = NA_real_
     ),
     
     # Breeding
     Breeding = dplyr::recode(trimws(Breeding),
-                             "Spring" = 1,
-                             "Autumn" = 2,
-                             .default = NA_real_
+                             "Spring"  = 1,
+                             "Autumn"  = 2,
+                             .default  = NA_real_
     ),
     
-    # Wings (Wing morphotype)
+    # Wing morphotype
     Wing.morph = dplyr::recode(trimws(Wing.morph),
-                               "A" = 1,
+                               "A"   = 1,
                                "A/B" = 2,
-                               "B" = 3,
+                               "B"   = 3,
                                "B/M" = 4,
-                               "M" = 5,
+                               "M"   = 5,
                                .default = NA_real_
     ),
     
@@ -138,21 +138,21 @@ data_long1 <- data_long1 %>%
                                        .default = NA_real_
     ),
     
-    # Areal distribution
-    Areal.distribution = dplyr::recode(trimws(Areal.distribution),
-                                       "Central Europe"   = 1,
-                                       "Europe"           = 2,
-                                       "West Palearctic"  = 2,
-                                       "South Palearctic" = 2,
-                                       "Eurasian"         = 3,
-                                       "Eurosiberian"     = 3,
-                                       "Palearctic"       = 4,
-                                       "North Palearctic" = 4,
-                                       "Transpalearctic"  = 4,
-                                       "Circumboreal"     = 4,
-                                       "Holoarctic"       = 4,
-                                       .default = NA_real_
-    ),
+    # Areal distribution (numeric codes for computation): climatic-latitudinal gradient: warm-temperate - temperate - boreal - subarctic
+    Areal.dist_num = as.numeric(dplyr::recode(as.character(trimws(Areal.distribution)),
+                                              "South Palearctic" = 1,
+                                              "West Palearctic"  = 1,
+                                              "Europe"           = 2,
+                                              "Central Europe"   = 2,
+                                              "Eurasian"         = 3,
+                                              "Holoarctic"       = 3,
+                                              "Palearctic"       = 3,
+                                              "Eurosiberian"     = 3,
+                                              "North Palearctic" = 4,
+                                              "Transpalearctic"  = 4,
+                                              "Circumboreal"     = 5,
+                                              .default = NA_real_
+    )),
     
     # Body size
     Body.size = as.numeric(Body.size)
@@ -163,7 +163,7 @@ data_long1 <- data_long1 %>%
     Wings               = scales::rescale(Wing.morph,          to = c(0, 1)),
     Bioindication.group = scales::rescale(Bioindication.group, to = c(0, 1)),
     Moisture.tolerance  = scales::rescale(Moisture.tolerance,  to = c(0, 1)),
-    Areal.distribution  = scales::rescale(Areal.distribution,  to = c(0, 1))
+    Areal.dist_scaled   = scales::rescale(Areal.dist_num,      to = c(0, 1))
   )
 
 colnames(data_long1)
@@ -171,13 +171,13 @@ colnames(data_long1)
 cwm_results <- data_long1 %>%
   group_by(Year, Locality) %>%
   summarize(
-    Dietary_cwm        = weighted.mean(Dietary, Count, na.rm = TRUE),
-    Breeding_cwm       = weighted.mean(Breeding, Count, na.rm = TRUE),
-    Wings_cwm          = weighted.mean(Wings, Count, na.rm = TRUE),
+    Dietary_cwm        = weighted.mean(Dietary,             Count, na.rm = TRUE),
+    Breeding_cwm       = weighted.mean(Breeding,            Count, na.rm = TRUE),
+    Wings_cwm          = weighted.mean(Wings,               Count, na.rm = TRUE),
     Bioindication_cwm  = weighted.mean(Bioindication.group, Count, na.rm = TRUE),
-    Moisture_cwm       = weighted.mean(Moisture.tolerance, Count, na.rm = TRUE),
-    Body_cwm           = weighted.mean(Body.size, Count, na.rm = TRUE),
-    Distribution_cwm   = weighted.mean(Areal.distribution, Count, na.rm = TRUE),
+    Moisture_cwm       = weighted.mean(Moisture.tolerance,  Count, na.rm = TRUE),
+    Body_cwm           = weighted.mean(Body.size,           Count, na.rm = TRUE),
+    Distribution_cwm01 = weighted.mean(Areal.dist_scaled,    Count, na.rm = TRUE),
     Abundance          = sum(Count),
     .groups = "drop"
   )
@@ -188,14 +188,19 @@ print(cwm_results)
 data_long1 <- data_long1 %>%
   mutate(
     Altitude_scaled  = as.numeric(scale(Altitude, center = TRUE, scale = TRUE)),
-    Altitude_scaled2 = Altitude_scaled^2)
+    Altitude_scaled2 = Altitude_scaled^2
+  )
 env_site <- data_long1 %>%
+  mutate(rad = Exposition2 * pi/180,
+         eastness = sin(rad),
+         northness = cos(rad)) %>%
   group_by(Year, Locality) %>%
   summarise(
-    Altitude        = mean(Altitude, na.rm = TRUE),
-    Altitude_scaled = mean(Altitude_scaled, na.rm = TRUE),
+    Altitude         = mean(Altitude, na.rm = TRUE),
+    Altitude_scaled  = mean(Altitude_scaled, na.rm = TRUE),
     Altitude_scaled2 = mean(Altitude_scaled2, na.rm = TRUE),
-    Exposition2     = mean(Exposition2, na.rm = TRUE),
+    eastness         = mean(eastness, na.rm = TRUE),
+    northness        = mean(northness, na.rm = TRUE),
     .groups = "drop"
   )
 cwm_results <- cwm_results %>%

@@ -38,7 +38,6 @@ coords <- data.frame(
                 14 + 6/60 + 11.05/3600)
 )
 library(sf)
-
 coords_sf <- st_as_sf(coords, coords = c("Longitude", "Latitude"), crs = 4326)
 coords_utm <- st_transform(coords_sf, crs = 32633)  # UTM zone 33N (for Czech Republic)
 coords_xy <- st_coordinates(coords_utm)
@@ -58,23 +57,29 @@ library(dplyr)
 library(mgcv)
 
 df <- cwm_clean %>%
-  mutate(Locality = factor(Locality),
-         Year     = factor(Year)) %>%
-  select(Moisture_cwm, Wings_cwm, Distribution_cwm, Body_cwm, Bioindication_cwm, Breeding_cwm, Dietary_cwm, X, Y, Altitude_scaled, Altitude_scaled2,
-         Exposition2, Locality) %>%
-  na.omit() %>%
-  mutate(X_km = (X - mean(X))/1000,
-         Y_km = (Y - mean(Y))/1000)
+  transmute(
+    Year=factor(Year),
+    Locality = factor(Locality),
+    Exposition2 = as.numeric(scale(Exposition2)),
+    Altitude_scaled, Altitude_scaled2,
+    X_km = (X - mean(X, na.rm = TRUE))/1000,
+    Y_km = (Y - mean(Y, na.rm = TRUE))/1000,
+    Moisture_cwm, Wings_cwm, Distribution_cwm, Distribution_cwm01, Body_cwm,
+    Bioindication_cwm, Breeding_cwm, Dietary_cwm
+  ) %>% na.omit()
+
+# confirm:
+stopifnot(is.numeric(df$Exposition2))
 
 # choose appropriate k (<= unique sites)
 k_xy <- max(6, min(10, nrow(dplyr::distinct(df, X_km, Y_km)) - 1))
 
 # GAM: simpler polynomial representation is preferred for interpretability and model parsimony than smooth term of Altitude.
 mod_gam1 <- gam(
-  Moisture_cwm ~ s(X_km, Y_km, bs = "tp", k = k_xy) +
+  Distribution_cwm ~ s(X_km, Y_km, bs = "tp", k = k_xy) +
     Altitude_scaled + Altitude_scaled2 +  
     Exposition2 +
-    s(Locality, bs = "re"),
+    s(Locality, bs = "re")+s(Year, bs="re"),
   data   = df,
   method = "REML"
 )
@@ -87,6 +92,7 @@ plot(sim)
 tiff('DHARMa_Wings.tiff', units = "in", width = 8, height = 10, res = 600)
 plot(sim)
 dev.off()
+
 # Plotting the effect of Altitude_scaled on CWM traits from mod_gam1
 library(gratia)
 library(dplyr)
@@ -149,4 +155,27 @@ p
 tiff('GAM_Moisture.tiff', units = "in", width = 8, height = 10, res = 600)
 print(p)
 dev.off()
+
+library(mgcv)
+library(purrr)
+
+responses <- c("Distribution_cwm","Moisture_cwm","Wings_cwm",
+               "Body_cwm","Bioindication_cwm","Breeding_cwm","Dietary_cwm")
+
+fit_one_gam <- function(y, df, k_xy) {
+  gam(
+    formula = reformulate(
+      termlabels = c(sprintf("s(X_km,Y_km,bs='tp',k=%d)", k_xy),
+                     "Altitude_scaled","Altitude_scaled2","Exposition2",
+                     "s(Locality,bs='re')"),
+      response  = y
+    ),
+    data   = df,
+    family = gaussian(),
+    method = "REML"
+  )
+}
+
+fits <- map(setNames(responses, responses), ~ fit_one_gam(.x, df, k_xy))
+summary(fits$Moisture_cwm)
 
