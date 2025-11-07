@@ -64,10 +64,12 @@ df <- cwm_clean %>%
     Altitude_scaled, Altitude_scaled2,
     X_km = (X - mean(X, na.rm = TRUE))/1000,
     Y_km = (Y - mean(Y, na.rm = TRUE))/1000,
-    Moisture_cwm, Wings_cwm, Distribution_cwm, Distribution_cwm01, Body_cwm,
+    Moisture_cwm, Wings_cwm, Distribution_cwm01, Body_cwm,
     Bioindication_cwm, Breeding_cwm, Dietary_cwm
   ) %>% na.omit()
-
+df <- df %>%
+  mutate(eastness = sin(Exposition2),
+         northness = cos(Exposition2))
 # confirm:
 stopifnot(is.numeric(df$Exposition2))
 
@@ -76,18 +78,40 @@ k_xy <- max(6, min(10, nrow(dplyr::distinct(df, X_km, Y_km)) - 1))
 
 # GAM: simpler polynomial representation is preferred for interpretability and model parsimony than smooth term of Altitude.
 mod_gam1 <- gam(
-  Distribution_cwm ~ s(X_km, Y_km, bs = "tp", k = k_xy) +
-    Altitude_scaled + Altitude_scaled2 +  
+  Body_cwm ~ s(X_km, Y_km, bs = "tp", k = k_xy) +
+    s(Altitude_scaled, k = 3) + s(Year, bs="re") +
     Exposition2 +
-    s(Locality, bs = "re")+s(Year, bs="re"),
-  data   = df,
+    s(Locality, bs = "re"),
+  data   = df,family = betar(),
   method = "REML"
 )
 summary(mod_gam1)
 
+family = betar(),
 library(DHARMa)
 sim <- simulateResiduals(fittedModel = mod_gam1, n = 1000, seed = 1)
 plot(sim)
+
+
+# correlogram (binned Moran’s I)
+library(gstat)
+library(sp)
+
+# 1) Numeric residuals (use a NEW name)
+r_pearson <- residuals(mod_gam1, type = "pearson")  # length should be 72
+
+# 2) Bind to df and convert to spatial
+df_res <- df
+df_res$r <- r_pearson
+
+coordinates(df_res) <- ~ X_km + Y_km   # coords already in km; CRS not required for variogram
+
+# 3) Empirical variogram (robust; sensible bins)
+vg <- variogram(r ~ 1, data = df_res, cutoff = 40, width = 2, cressie = TRUE)
+
+plot(vg, main = "Residual variogram (Pearson)")
+
+
 
 tiff('DHARMa_Wings.tiff', units = "in", width = 8, height = 10, res = 600)
 plot(sim)
