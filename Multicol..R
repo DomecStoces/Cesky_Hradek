@@ -29,6 +29,6 @@ dev.off()
 # Quantitative check of multicollinearity using VIF
 # A VIF value above 5 or 10 indicates problematic multicollinearity
 library(car)
-model_vif <- lm(Temperature ~ Precipitation + Wind, data = data_long1)
+model_vif <- lm(Precipitation ~ Wind + Temperature, data = data_long1)
 vif(model_vif)
 # VIF confirms they don’t inflate variance in each other’s estimates.
