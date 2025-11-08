@@ -6,7 +6,7 @@ library(tibble)
 ## 1) Smooth estimates for s(Altitude_scaled) ----
 sm <- smooth_estimates(
   mod_gam1,
-  select = "s(Altitude_scaled)",  # <— use `select`, not `smooth`
+  select = "s(Altitude_scaled)",
   n = 200,
   unconditional = TRUE
 )
@@ -53,6 +53,7 @@ pres <- pres %>%
   )
 
 ## 5B) Plot on response scale (adds intercept, inverse link)
+
 p_resp <- ggplot() +
   geom_ribbon(
     data = sm,
@@ -71,7 +72,7 @@ p_resp <- ggplot() +
   ) +
   labs(
     x = "Altitude (scaled)",
-    y = "Wings CWM"
+    y = "Moisture preferences CWM"
   ) +
   scale_x_continuous(breaks = seq(-2, 2, 1), minor_breaks = NULL) +
   scale_y_continuous(
@@ -92,3 +93,7 @@ p_resp <- ggplot() +
     plot.margin      = margin(6, 8, 6, 6)
   )
 p_resp
+
+tiff('GAM_Moisture.tiff', units = "in", width = 8, height = 10, res = 600)
+print(p_resp)
+dev.off()

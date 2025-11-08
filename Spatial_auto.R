@@ -77,8 +77,9 @@ stopifnot(is.numeric(df$Exposition2))
 k_xy <- max(6, min(10, nrow(dplyr::distinct(df, X_km, Y_km)) - 1))
 
 # GAM: simpler polynomial representation is preferred for interpretability and model parsimony than smooth term of Altitude.
+# Smooth factor must not restrict the model’s flexibility.
 mod_gam1 <- gam(
-  Distribution_cwm01 ~ s(X_km, Y_km, bs = "tp", k = k_xy) +
+  Wings_cwm ~ s(X_km, Y_km, bs = "tp", k = k_xy) +
     s(Altitude_scaled, k=3) + s(Year, bs="re") +
     Exposition2 +
     s(Locality, bs = "re"),
@@ -86,7 +87,7 @@ mod_gam1 <- gam(
   method = "REML"
 )
 summary(mod_gam1)
-
+gam.check(mod_gam1)
 
 ,family = betar()
 library(DHARMa)
@@ -114,7 +115,7 @@ plot(vg, main = "Residual variogram (Pearson)")
 
 
 
-tiff('DHARMa_Wings.tiff', units = "in", width = 8, height = 10, res = 600)
+tiff('DHARMa_Moisture.tiff', units = "in", width = 8, height = 10, res = 600)
 plot(sim)
 dev.off()
 
@@ -177,10 +178,11 @@ p <- ggplot() +
     plot.margin      = margin(6, 8, 6, 6)
   )
 p
-tiff('GAM_Moisture.tiff', units = "in", width = 8, height = 10, res = 600)
+tiff('GAM_Distribution.tiff', units = "in", width = 8, height = 10, res = 600)
 print(p)
 dev.off()
 
+# Fit GAMs for all CWM traits
 library(mgcv)
 library(purrr)
 
