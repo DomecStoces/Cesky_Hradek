@@ -78,20 +78,21 @@ k_xy <- max(6, min(10, nrow(dplyr::distinct(df, X_km, Y_km)) - 1))
 
 # GAM: simpler polynomial representation is preferred for interpretability and model parsimony than smooth term of Altitude.
 mod_gam1 <- gam(
-  Body_cwm ~ s(X_km, Y_km, bs = "tp", k = k_xy) +
-    s(Altitude_scaled, k = 3) + s(Year, bs="re") +
+  Distribution_cwm01 ~ s(X_km, Y_km, bs = "tp", k = k_xy) +
+    s(Altitude_scaled, k=3) + s(Year, bs="re") +
     Exposition2 +
     s(Locality, bs = "re"),
-  data   = df,family = betar(),
+  data   = df, ,family = betar(),
   method = "REML"
 )
 summary(mod_gam1)
 
-family = betar(),
-library(DHARMa)
-sim <- simulateResiduals(fittedModel = mod_gam1, n = 1000, seed = 1)
-plot(sim)
 
+,family = betar()
+library(DHARMa)
+library(qgam)
+sim <- simulateResiduals(fittedModel = mod_gam1, n = 2000, seed = 123)
+plot(sim, qgam = TRUE) 
 
 # correlogram (binned Moran’s I)
 library(gstat)
@@ -124,7 +125,7 @@ library(tidyr)
 library(ggplot2)
 
 # Terms to exclude
-excl <- c("s(Locality)", "s(X_km,Y_km)")
+excl <- c("s(Locality)", "s(X_km,Y_km)", "s(Year)")
 
 # 1) Grid for the line/ribbon
 tv <- typical_values(mod_gam1)
