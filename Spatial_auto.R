@@ -78,14 +78,36 @@ k_xy <- max(6, min(10, nrow(dplyr::distinct(df, X_km, Y_km)) - 1))
 
 # GAM: simpler polynomial representation is preferred for interpretability and model parsimony than smooth term of Altitude.
 # Smooth factor must not restrict the model’s flexibility.
-mod_gam1 <- gam(
-  Wings_cwm ~ s(X_km, Y_km, bs = "tp", k = k_xy) +
-    s(Altitude_scaled, k=3) + s(Year, bs="re") +
+mod_pure <- gam(
+  Distribution_cwm01 ~ s(X_km, Y_km, bs = "tp", k = k_xy) +
+    s(Altitude_scaled, bs = "cr", k = 3) +
+    s(Year, bs = "re") +
     Exposition2 +
     s(Locality, bs = "re"),
-  data   = df, ,family = betar(),
+  data = df,
+  family = betar(),
   method = "REML"
 )
+
+# Deviations from the mid-domain null
+eps <- 1e-6
+df <- df |>
+  dplyr::mutate(
+    mu0 = 0.6 + 0.3 * exp(-(Altitude_scaled)^2 / (2 * 0.5^2)),
+    mu0 = pmin(pmax(mu0, eps), 1 - eps)
+  )
+
+mod_gam1 <- gam(
+  Wings_cwm ~
+    s(X_km, Y_km, bs = "tp", k = k_xy) +
+    s(Altitude_scaled, bs = "cr", k = 3) +   
+    s(Year, bs = "re") +
+    Exposition2 +
+    s(Locality, bs = "re") +
+    offset(qlogis(mu0)),
+  data = df, family = betar(), method = "REML"
+)
+
 summary(mod_gam1)
 gam.check(mod_gam1)
 
