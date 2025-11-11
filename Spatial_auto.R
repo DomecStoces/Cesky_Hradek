@@ -114,7 +114,7 @@ gam.check(mod_gam1)
 ,family = betar()
 library(DHARMa)
 library(qgam)
-sim <- simulateResiduals(fittedModel = mod_gam1, n = 2000, seed = 123)
+sim <- simulateResiduals(fittedModel = mod_gam1, n = 1000, seed = 123)
 plot(sim, qgam = TRUE) 
 
 # correlogram (binned Moran’s I)
