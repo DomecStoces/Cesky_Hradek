@@ -114,7 +114,8 @@ gam.check(mod_gam1)
 ,family = betar()
 library(DHARMa)
 library(qgam)
-sim <- simulateResiduals(fittedModel = mod_gam1, n = 1000, seed = 123)
+library(mgcViz)
+sim <- simulateResiduals(fittedModel = mod_gam1, n = 2000, seed = 123)
 plot(sim, qgam = TRUE) 
 
 # correlogram (binned Moran’s I)
@@ -137,7 +138,7 @@ plot(vg, main = "Residual variogram (Pearson)")
 
 
 
-tiff('DHARMa_Moisture.tiff', units = "in", width = 8, height = 10, res = 600)
+tiff('DHARMa_Distribution.tiff', units = "in", width = 8, height = 6, res = 600)
 plot(sim)
 dev.off()
 
