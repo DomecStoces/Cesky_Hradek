@@ -72,7 +72,7 @@ p_resp <- ggplot() +
   ) +
   labs(
     x = "Altitude (scaled)",
-    y = "Moisture preferences CWM"
+    y = "Dispersal ability CWM"
   ) +
   scale_x_continuous(breaks = seq(-2, 2, 1), minor_breaks = NULL) +
   scale_y_continuous(
@@ -94,6 +94,6 @@ p_resp <- ggplot() +
   )
 p_resp
 
-tiff('GAM_Moisture.tiff', units = "in", width = 8, height = 10, res = 600)
+tiff('GAM_Wings.tiff', units = "in", width = 8, height = 10, res = 600)
 print(p_resp)
 dev.off()

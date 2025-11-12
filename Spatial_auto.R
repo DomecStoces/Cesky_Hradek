@@ -79,7 +79,7 @@ k_xy <- max(6, min(10, nrow(dplyr::distinct(df, X_km, Y_km)) - 1))
 # GAM: simpler polynomial representation is preferred for interpretability and model parsimony than smooth term of Altitude.
 # Smooth factor must not restrict the model’s flexibility.
 mod_pure <- gam(
-  Distribution_cwm01 ~ s(X_km, Y_km, bs = "tp", k = k_xy) +
+  Wings_cwm ~ s(X_km, Y_km, bs = "tp", k = k_xy) +
     s(Altitude_scaled, bs = "cr", k = 3) +
     s(Year, bs = "re") +
     Exposition2 +
