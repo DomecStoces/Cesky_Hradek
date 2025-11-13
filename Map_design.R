@@ -2,6 +2,8 @@ library(dplyr)
 library(stringr)
 library(sf)
 library(leaflet)
+library(ggplot2)
+library(ggthemes)
 
 # Include Altitude in tibble format
 dat_raw <- tibble::tribble(
@@ -158,14 +160,15 @@ p_central_labels <- ggplot() +
   ggrepel::geom_text_repel(
     data = label_df,
     aes(x = X, y = Y, label = iso_a2),
-    size = 3,
+    size = 5.2,                
     fontface = "bold",
     color = "black",
-    segment.size = 0.2,
-    min.segment.length = 0
+    segment.size = 0.25,
+    min.segment.length = 0,
+    max.overlaps = Inf        
   ) +
   coord_sf(xlim = xlim, ylim = ylim, expand = FALSE) +
-  theme_map
+  theme_map()
 
 p_central_labels
 
@@ -192,7 +195,7 @@ eu
 center_p <- st_centroid(st_union(pts_p))
 
 # Define half-size of the square (in km)
-half_size_km <- 35     # adjust as needed
+half_size_km <- 15     # adjust as needed
 half_size_m  <- half_size_km * 1000
 
 # Convert center to numeric coordinates
@@ -243,29 +246,81 @@ line_p <- st_cast(st_combine(pts_p), "LINESTRING")
 cz_win   <- st_crop(cz_p,  win)
 line_win <- suppressWarnings(st_intersection(line_p, win))
 pts_win  <- pts_p[ st_within(pts_p, win, sparse = FALSE), ]
+d14 <- cbind(st_drop_geometry(pts_win), st_coordinates(pts_win))
+d14 <- d14[d14$Locality == 14, ]
 
 p_cz_detail <- ggplot() +
   geom_sf(data = cz_win,   fill = "grey98", color = "grey70", linewidth = 0.2) +
   geom_sf(data = line_win, color = "grey40", linewidth = 0.5) +
-  geom_sf(data = pts_win,  size = 2.2, color = "black") +
+  geom_sf(data = pts_win,  size = 2.8, color = "black") +
+  ggrepel::geom_label_repel(
+    data = d14,
+    aes(
+      X, Y,
+      label = sprintf("%s.\n%dm\n%s", Locality, Altitude, Exposition)
+    ),
+    nudge_x = 30,    # <- adjust this value, small = slight move
+    nudge_y = 0,     # keep original height
+    size = 4.0,
+    label.size = 0.20,
+    label.padding = unit(0.1, "lines"),
+    label.r = unit(0.15, "lines"),
+    box.padding = 0.5,
+    min.segment.length = 0,
+    max.overlaps = Inf
+  )+
+  coord_sf(xlim = c(bb_exp["xmin"], bb_exp["xmax"]),
+           ylim = c(bb_exp["ymin"], bb_exp["ymax"]),
+           expand = FALSE) +
+  theme_void()
+p_cz_detail
+
+pad <- 0.10
+bb  <- st_bbox(circle_p)
+xr <- as.numeric(bb["xmax"] - bb["xmin"])
+yr <- as.numeric(bb["ymax"] - bb["ymin"])
+bb_exp <- st_bbox(
+  c(xmin = as.numeric(bb["xmin"]) - pad*xr,
+    ymin = as.numeric(bb["ymin"]) - pad*yr,
+    xmax = as.numeric(bb["xmax"]) + pad*xr,
+    ymax = as.numeric(bb["ymax"]) + pad*yr),
+  crs = st_crs(circle_p)
+)
+win <- st_as_sfc(bb_exp)
+
+line_p <- st_cast(st_combine(pts_p), "LINESTRING")
+cz_win   <- st_crop(cz_p,  win)
+line_win <- suppressWarnings(st_intersection(line_p, win))
+pts_win  <- pts_p[ st_within(pts_p, win, sparse = FALSE), ]
+
+p_cz_detail <- ggplot() +
+  geom_sf(data = cz_win,   fill = "grey98", color = "grey70", linewidth = 0.2) +
+  geom_sf(data = line_win, color = "grey40", linewidth = 0.5) +
+  geom_sf(data = pts_win,  size = 2.8, color = "black") +
   ggrepel::geom_label_repel(
     data = cbind(sf::st_drop_geometry(pts_win), sf::st_coordinates(pts_win)),
     aes(
       X, Y,
       label = sprintf("%s.\n%dm\n%s", Locality, Altitude, Exposition)
     ),
-    size = 2.6, label.size = 0.15, label.padding = unit(0.08, "lines")
+    size = 4.0,
+    label.size = 0.2,
+    label.padding = unit(0.2, "lines"),
+    label.r = unit(0.15, "lines"),
+    box.padding = 1.3,
+    min.segment.length = 0,
+    max.overlaps = Inf   
   ) +
   coord_sf(xlim = c(bb_exp["xmin"], bb_exp["xmax"]),
            ylim = c(bb_exp["ymin"], bb_exp["ymax"]),
            expand = FALSE) +
   theme_void()
 
-p_cz_overview
 p_cz_detail
-
-tiff('p_cz_overview.tiff', units = "in", width = 8, height = 10, res = 600)
 p_cz_overview
+
+tiff('p_cz_detail.tiff', units = "in", width = 8, height = 10, res = 600)
+p_cz_detail
 dev.off()
 
 pdf("p_cz_detail.pdf", width = 8, height = 10)
