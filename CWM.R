@@ -177,7 +177,7 @@ cwm_results <- data_long1 %>%
     Bioindication_cwm  = weighted.mean(Bioindication.group, Count, na.rm = TRUE),
     Moisture_cwm       = weighted.mean(Moisture.tolerance,  Count, na.rm = TRUE),
     Body_cwm           = weighted.mean(Body.size,           Count, na.rm = TRUE),
-    Distribution_cwm01 = weighted.mean(Areal.dist_scaled,    Count, na.rm = TRUE),
+    Distribution_cwm = weighted.mean(Areal.dist_scaled,    Count, na.rm = TRUE),
     Abundance          = sum(Count),
     .groups = "drop"
   )
@@ -276,7 +276,7 @@ vif(mod_cwm)
 
 # Correlation matrix or PCA of CWMs
 # pairwise correlations or perform a PCA on the CWM matrix to see if traits show a shared gradient across sites:
-cwm_mat <- cwm_clean[, c("Distribution_cwm01", "Wings_cwm")]
+cwm_mat <- cwm_clean[, c("Distribution_cwm", "Wings_cwm")]
 cor(cwm_mat, use = "pairwise.complete.obs", method = "spearman")
 corrplot(cor(cwm_mat), method = "color", tl.col = "black")
 
@@ -300,7 +300,7 @@ mantel(
 )
 # Methods: The independence among significant CWMs was tested using a Mantel test (Spearman’s ρ, 999 permutations), which showed no significant correlation between Moisture_cwm and Distribution_cwm (ρ = 0.04, p = 0.17), indicating that the traits describe distinct ecological gradients.
 
-tiff('PCA.tiff', units="in", width=5, height=8, res=600)
+tiff('PCA.tiff', units="in", width=5, height=5, res=600)
 res.pca <- PCA(cwm_mat, graph = TRUE)
 dev.off()
 
