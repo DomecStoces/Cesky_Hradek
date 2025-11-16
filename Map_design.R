@@ -187,39 +187,48 @@ dev.off()
 # Download basemaps
 eu <- ne_countries(scale = "medium", continent = "Europe", returnclass = "sf")
 cz <- eu %>% filter(admin == "Czechia")
-crs_plot <- 3035
+
+crs_plot <- 3035  # ETRS89 / LAEA Europe
+
 eu_p  <- st_transform(eu, crs_plot)
 cz_p  <- st_transform(cz, crs_plot)
 pts_p <- st_transform(pts, crs_plot)
 
-eu
-# Use the centroid of your sites as before
-center_p <- st_centroid(st_union(pts_p))
+#pad <- 0.10              
+#bb  <- st_bbox(pts_p)     
+#xr  <- as.numeric(bb["xmax"] - bb["xmin"])
+#yr  <- as.numeric(bb["ymax"] - bb["ymin"])
 
-# Define half-size of the square (in km)
-half_size_km <- 15     # adjust as needed
-half_size_m  <- half_size_km * 1000
-
-# Convert center to numeric coordinates
-cx <- st_coordinates(center_p)[1,1]
-cy <- st_coordinates(center_p)[1,2]
+#bb_exp <- st_bbox(
+#  c(
+#    xmin = as.numeric(bb["xmin"]) - pad * xr,
+#    ymin = as.numeric(bb["ymin"]) - pad * yr,
+#    xmax = as.numeric(bb["xmax"]) + pad * xr,
+#    ymax = as.numeric(bb["ymax"]) + pad * yr
+#  ),
+#  crs = st_crs(pts_p)
+#)
 
 # Create a square polygon centered on the site cluster
-square_mat <- matrix(c(
-  cx - half_size_m, cy - half_size_m,
-  cx + half_size_m, cy - half_size_m,
-  cx + half_size_m, cy + half_size_m,
-  cx - half_size_m, cy + half_size_m,
-  cx - half_size_m, cy - half_size_m
-), ncol = 2, byrow = TRUE)
+square_mat <- matrix(
+  c(
+    bb_exp["xmin"], bb_exp["ymin"],
+    bb_exp["xmax"], bb_exp["ymin"],
+    bb_exp["xmax"], bb_exp["ymax"],
+    bb_exp["xmin"], bb_exp["ymax"],
+    bb_exp["xmin"], bb_exp["ymin"]
+  ),
+  ncol = 2,
+  byrow = TRUE
+)
 
-square_p <- st_polygon(list(square_mat)) |> 
-  st_sfc(crs = st_crs(pts_p))
+square_p <- st_sfc(st_polygon(list(square_mat)), crs = st_crs(pts_p))
 
 # Czech overview map with square highlight
 p_cz_overview <- ggplot() +
   geom_sf(data = cz_p, fill = "grey95", color = "grey50", linewidth = 0.25) +
-  geom_sf(data = square_p, fill = "grey70", color = "grey30", alpha = 0.3, linewidth = 0.4) +
+  geom_sf(data = square_p, fill = "grey70", color = "grey30",
+          alpha = 0.3, linewidth = 0.4) +
   theme_void()
 tiff('p_cz_overview.tiff', units = "in", width = 8, height = 10, res = 600)
 p_cz_overview
@@ -236,6 +245,7 @@ library(terra)
 library(ggplot2)
 library(ggrepel)
 library(grid)
+library(elevatr)
 
 ## 0) Window around your elevational gradient -------------------------
 
@@ -245,57 +255,64 @@ xr  <- as.numeric(bb["xmax"] - bb["xmin"])
 yr  <- as.numeric(bb["ymax"] - bb["ymin"])
 
 bb_exp <- st_bbox(
-  c(xmin = as.numeric(bb["xmin"]) - pad * xr,
+  c(
+    xmin = as.numeric(bb["xmin"]) - pad * xr,
     ymin = as.numeric(bb["ymin"]) - pad * yr,
     xmax = as.numeric(bb["xmax"]) + pad * xr,
-    ymax = as.numeric(bb["ymax"]) + pad * yr),
+    ymax = as.numeric(bb["ymax"]) + pad * yr
+  ),
   crs = st_crs(circle_p)
 )
 
 win    <- st_as_sfc(bb_exp)
 win_sf <- st_as_sf(win)
 
+
 ## 1) DEM + hillshade -------------------------------------------------
 
 # if you don't already have `dem`:
-# dem_r <- get_elev_raster(locations = win_sf, z = 12, clip = "locations")
-# dem   <- rast(dem_r)
+win_wgs <- st_transform(win_sf, 4326)
 
-# crop to window and match CRS of your points
-dem_win <- project(dem, st_crs(pts_p)$wkt) |> crop(vect(win))
+dem_r <- get_elev_raster(
+  locations = win_wgs,
+  z         = 12,          # tweak zoom as needed
+  clip      = "locations"
+)
+
+dem <- rast(dem_r)
+
+# download
+dem_win <- dem |>
+  project(st_crs(pts_p)$wkt) |>
+  crop(vect(win))
 
 slope   <- terrain(dem_win, v = "slope",  unit = "radians")
 aspect  <- terrain(dem_win, v = "aspect", unit = "radians")
 hill    <- shade(slope, aspect, angle = 40, direction = 315)
 
-# downsample for faster plotting
+## 2) Vector layers clipped to window ---------------------------------
 hill_small <- aggregate(hill, fact = 3, fun = mean)
 
 hill_df <- as.data.frame(hill_small, xy = TRUE, na.rm = TRUE)
 names(hill_df)[3] <- "hillshade"
-
-## 2) Vector layers clipped to window --------------------------------
-
-line_p  <- st_cast(st_combine(pts_p), "LINESTRING")
-cz_win  <- st_crop(cz_p,  win)
+line_p   <- st_cast(st_combine(pts_p), "LINESTRING")
+cz_win   <- st_crop(cz_p,  win)
 line_win <- suppressWarnings(st_intersection(line_p, win))
 pts_win  <- pts_p[st_within(pts_p, win, sparse = FALSE), ]
 
 ## 3) Plot ------------------------------------------------------------
 
 p_cz_detail <- ggplot() +
-  # elevation background
   geom_raster(
     data = hill_df,
     aes(x = x, y = y, fill = hillshade)
   ) +
   scale_fill_gradientn(
-    colours = gray.colors(50, start = 1, end = 0),   # light → dark
+    colours = gray.colors(50, start = 0.98, end = 0.05),
     guide = "none"
   ) +
-  # boundaries and sites
   geom_sf(data = cz_win,   fill = NA, color = "black", linewidth = 1.0) +
-  geom_sf(data = line_win, color = "grey40", linewidth = 1.7) +
+  geom_sf(data = line_win, color = "grey30", linewidth = 1.7) +
   geom_sf(data = pts_win,  size = 2.8, color = "black") +
   ggrepel::geom_label_repel(
     data = cbind(st_drop_geometry(pts_win), st_coordinates(pts_win)),
@@ -325,6 +342,10 @@ tiff('p_cz_detail.tiff', units = "in", width = 8, height = 10, res = 600)
 p_cz_detail
 dev.off()
 
-pdf("p_cz_detail.pdf", width = 8, height = 10)
+pdf("p_cz_detail.pdf", width = 7, height = 9)
 p_cz_detail
+dev.off()
+
+pdf("pz.pdf", width = 7, height = 9)
+pz
 dev.off()
