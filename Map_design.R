@@ -235,7 +235,7 @@ library(sf)
 library(terra)
 library(ggplot2)
 library(ggrepel)
-library(grid)   # for unit()
+library(grid)
 
 ## 0) Window around your elevational gradient -------------------------
 
