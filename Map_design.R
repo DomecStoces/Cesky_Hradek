@@ -4,6 +4,7 @@ library(sf)
 library(leaflet)
 library(ggplot2)
 library(ggthemes)
+library(elevatr)
 
 # Include Altitude in tibble format
 dat_raw <- tibble::tribble(
@@ -82,7 +83,8 @@ library(ggplot2)
 library(rnaturalearth)
 library(rnaturalearthdata)
 library(ggrepel)
-
+library(grid)
+library(terra)
 # A panel with overall Europe with Czech republic highlighted
 #####
 # Load Europe and Czech Republic polygons
@@ -229,76 +231,74 @@ dev.off()
 #####
 # B panel with describtions
 #####
-pad <- 0.10
-bb  <- st_bbox(circle_p)
-xr <- as.numeric(bb["xmax"] - bb["xmin"])
-yr <- as.numeric(bb["ymax"] - bb["ymin"])
-bb_exp <- st_bbox(
-  c(xmin = as.numeric(bb["xmin"]) - pad*xr,
-    ymin = as.numeric(bb["ymin"]) - pad*yr,
-    xmax = as.numeric(bb["xmax"]) + pad*xr,
-    ymax = as.numeric(bb["ymax"]) + pad*yr),
-  crs = st_crs(circle_p)
-)
-win <- st_as_sfc(bb_exp)
+library(sf)
+library(terra)
+library(ggplot2)
+library(ggrepel)
+library(grid)   # for unit()
 
-line_p <- st_cast(st_combine(pts_p), "LINESTRING")
-cz_win   <- st_crop(cz_p,  win)
-line_win <- suppressWarnings(st_intersection(line_p, win))
-pts_win  <- pts_p[ st_within(pts_p, win, sparse = FALSE), ]
-d14 <- cbind(st_drop_geometry(pts_win), st_coordinates(pts_win))
-d14 <- d14[d14$Locality == 14, ]
-
-p_cz_detail <- ggplot() +
-  geom_sf(data = cz_win,   fill = "grey98", color = "grey70", linewidth = 0.2) +
-  geom_sf(data = line_win, color = "grey40", linewidth = 0.5) +
-  geom_sf(data = pts_win,  size = 2.8, color = "black") +
-  ggrepel::geom_label_repel(
-    data = d14,
-    aes(
-      X, Y,
-      label = sprintf("%s.\n%dm\n%s", Locality, Altitude, Exposition)
-    ),
-    nudge_x = 30,    # <- adjust this value, small = slight move
-    nudge_y = 0,     # keep original height
-    size = 4.0,
-    label.size = 0.20,
-    label.padding = unit(0.1, "lines"),
-    label.r = unit(0.15, "lines"),
-    box.padding = 0.5,
-    min.segment.length = 0,
-    max.overlaps = Inf
-  )+
-  coord_sf(xlim = c(bb_exp["xmin"], bb_exp["xmax"]),
-           ylim = c(bb_exp["ymin"], bb_exp["ymax"]),
-           expand = FALSE) +
-  theme_void()
-p_cz_detail
+## 0) Window around your elevational gradient -------------------------
 
 pad <- 0.10
 bb  <- st_bbox(circle_p)
-xr <- as.numeric(bb["xmax"] - bb["xmin"])
-yr <- as.numeric(bb["ymax"] - bb["ymin"])
+xr  <- as.numeric(bb["xmax"] - bb["xmin"])
+yr  <- as.numeric(bb["ymax"] - bb["ymin"])
+
 bb_exp <- st_bbox(
-  c(xmin = as.numeric(bb["xmin"]) - pad*xr,
-    ymin = as.numeric(bb["ymin"]) - pad*yr,
-    xmax = as.numeric(bb["xmax"]) + pad*xr,
-    ymax = as.numeric(bb["ymax"]) + pad*yr),
+  c(xmin = as.numeric(bb["xmin"]) - pad * xr,
+    ymin = as.numeric(bb["ymin"]) - pad * yr,
+    xmax = as.numeric(bb["xmax"]) + pad * xr,
+    ymax = as.numeric(bb["ymax"]) + pad * yr),
   crs = st_crs(circle_p)
 )
-win <- st_as_sfc(bb_exp)
 
-line_p <- st_cast(st_combine(pts_p), "LINESTRING")
-cz_win   <- st_crop(cz_p,  win)
+win    <- st_as_sfc(bb_exp)
+win_sf <- st_as_sf(win)
+
+## 1) DEM + hillshade -------------------------------------------------
+
+# if you don't already have `dem`:
+# dem_r <- get_elev_raster(locations = win_sf, z = 12, clip = "locations")
+# dem   <- rast(dem_r)
+
+# crop to window and match CRS of your points
+dem_win <- project(dem, st_crs(pts_p)$wkt) |> crop(vect(win))
+
+slope   <- terrain(dem_win, v = "slope",  unit = "radians")
+aspect  <- terrain(dem_win, v = "aspect", unit = "radians")
+hill    <- shade(slope, aspect, angle = 40, direction = 315)
+
+# downsample for faster plotting
+hill_small <- aggregate(hill, fact = 3, fun = mean)
+
+hill_df <- as.data.frame(hill_small, xy = TRUE, na.rm = TRUE)
+names(hill_df)[3] <- "hillshade"
+
+## 2) Vector layers clipped to window --------------------------------
+
+line_p  <- st_cast(st_combine(pts_p), "LINESTRING")
+cz_win  <- st_crop(cz_p,  win)
 line_win <- suppressWarnings(st_intersection(line_p, win))
-pts_win  <- pts_p[ st_within(pts_p, win, sparse = FALSE), ]
+pts_win  <- pts_p[st_within(pts_p, win, sparse = FALSE), ]
+
+## 3) Plot ------------------------------------------------------------
 
 p_cz_detail <- ggplot() +
-  geom_sf(data = cz_win,   fill = "grey98", color = "grey70", linewidth = 0.2) +
-  geom_sf(data = line_win, color = "grey40", linewidth = 0.5) +
+  # elevation background
+  geom_raster(
+    data = hill_df,
+    aes(x = x, y = y, fill = hillshade)
+  ) +
+  scale_fill_gradientn(
+    colours = gray.colors(50, start = 1, end = 0),   # light → dark
+    guide = "none"
+  ) +
+  # boundaries and sites
+  geom_sf(data = cz_win,   fill = NA, color = "black", linewidth = 1.0) +
+  geom_sf(data = line_win, color = "grey40", linewidth = 1.7) +
   geom_sf(data = pts_win,  size = 2.8, color = "black") +
   ggrepel::geom_label_repel(
-    data = cbind(sf::st_drop_geometry(pts_win), sf::st_coordinates(pts_win)),
+    data = cbind(st_drop_geometry(pts_win), st_coordinates(pts_win)),
     aes(
       X, Y,
       label = sprintf("%s.\n%dm\n%s", Locality, Altitude, Exposition)
@@ -309,11 +309,13 @@ p_cz_detail <- ggplot() +
     label.r = unit(0.15, "lines"),
     box.padding = 1.3,
     min.segment.length = 0,
-    max.overlaps = Inf   
+    max.overlaps = Inf
   ) +
-  coord_sf(xlim = c(bb_exp["xmin"], bb_exp["xmax"]),
-           ylim = c(bb_exp["ymin"], bb_exp["ymax"]),
-           expand = FALSE) +
+  coord_sf(
+    xlim   = c(bb_exp["xmin"], bb_exp["xmax"]),
+    ylim   = c(bb_exp["ymin"], bb_exp["ymax"]),
+    expand = FALSE
+  ) +
   theme_void()
 
 p_cz_detail
