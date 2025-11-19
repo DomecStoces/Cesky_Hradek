@@ -72,7 +72,7 @@ p_resp <- ggplot() +
   ) +
   labs(
     x = "Altitude (scaled)",
-    y = "Moisture CWM"
+    y = "Moisture preference CWM"
   ) +
   scale_x_continuous(breaks = seq(-2, 2, 1), minor_breaks = NULL) +
   scale_y_continuous(

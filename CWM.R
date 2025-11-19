@@ -268,11 +268,21 @@ coef_test(mod1, vcov = V)
 
 # Wings: The community-weighted mean of wing morphology (Wings_cwm) showed a strong nonlinear relationship with altitude (Type III ANOVA: F₂,₇₄ = 22.7, p < 0.001). Both the linear and quadratic terms of altitude remained significant when using heteroskedasticity-robust standard errors (HC3, p < 0.01) and bootstrapped confidence intervals (95% CI: linear −0.0110 to −0.0044; quadratic 3.9×10⁻⁶ to 9.1×10⁻⁶). Although tests indicated non-constant variance (Breusch–Pagan p = 0.022), the effect size and pattern were consistent across robust estimation procedures, supporting a strong altitudinal gradient in wing reduction.
 
+cwm_mat3 <- cwm_clean[, c("Wings_cwm", "Distribution_cwm", "Moisture_cwm")]
 # Correlation among CWMs 
 library(corrplot)
+cor_mat <- cor(
+  cwm_results[, c("Wings_cwm", "Distribution_cwm", "Moisture_cwm")],
+  method = "spearman",
+  use = "pairwise.complete.obs"
+)
+colnames(cor_mat) <- rownames(cor_mat) <- c(
+  "Dispersal ability",
+  "Distribution affinity",
+  "Moisture preference"
+)
 corrplot(
-  cor(cwm_results[, c("Wings_cwm", "Distribution_cwm", "Moisture_cwm")],
-      method = "spearman", use = "pairwise.complete.obs"),
+  cor_mat,
   method = "color",
   tl.col = "black",
   tl.cex = 1.2,
@@ -280,21 +290,26 @@ corrplot(
   number.cex = 1.2,
   col = colorRampPalette(c("#2166AC","#FFFFFF","#B2182B"))(200)
 )
-mod_cwm <- lm(Altitude_scaled^2 ~ Wings_cwm+Moisture_cwm + Distribution_cwm, data = cwm_clean)
-vif(mod_cwm)
 
 # or PCA
 library(FactoMineR)
 library(factoextra)
 cwm_mat3 <- cwm_clean %>%
-  select(Wings_cwm, Distribution_cwm, Moisture_cwm) %>%
-  na.omit() 
+  select(
+    `Dispersal ability`   = Wings_cwm,
+    `Distribution affinity` = Distribution_cwm,
+    `Moisture preference`            = Moisture_cwm
+  ) %>%
+  na.omit()
 res.pca3 <- PCA(cwm_mat3, scale.unit = TRUE, graph = FALSE)
 fviz_pca_var(
   res.pca3,
-  repel  = TRUE,     
-  col.var = "black"  
+  repel  = TRUE,
+  col.var = "black"
 )
+
+loadings <- res.pca3$var$coord
+loadings
 # How CWMs jointly respond to environment?
 # the overall trait–environment concordance
 library(vegan)
@@ -313,15 +328,15 @@ mantel(d_dist, d_moist, method = "spearman", permutations = 999)
 mantel(d_wings, d_moist, method = "spearman", permutations = 999)
 # Methods: The independence among significant CWMs was tested using a Mantel test (Spearman’s ρ, 999 permutations), which showed no significant correlation between Moisture_cwm and Distribution_cwm (ρ = 0.04, p = 0.17), indicating that the traits describe distinct ecological gradients.
 
-tiff('PCA.tiff', units="in", width=5, height=5, res=600)
-fviz_pca_var(
-  res.pca3,
-  repel  = TRUE,     
-  col.var = "black"  
+tiff('corrplot.tiff', units="in", width=7, height=6, res=600)
+corrplot(
+  cor_mat,
+  method = "color",
+  tl.col = "black",
+  tl.cex = 1.2,
+  addCoef.col = "black",
+  number.cex = 1.2,
+  col = colorRampPalette(c("#2166AC","#FFFFFF","#B2182B"))(200)
 )
 dev.off()
 
-# Graphical representation of the relationship between Altitude and CWMs
-library(ggplot2)
-ggplot(cwm_clean, aes(Altitude, Wings_cwm)) +
-  geom_point() + geom_smooth(method = "gam", formula = y ~ s(x, k = 4))

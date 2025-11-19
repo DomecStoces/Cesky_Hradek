@@ -135,8 +135,6 @@ vg <- variogram(r ~ 1, data = df_res, cutoff = 40, width = 2, cressie = TRUE)
 
 plot(vg, main = "Residual variogram (Pearson)")
 
-
-
 tiff('DHARMa_Moisture.tiff', units = "in", width = 8, height = 6, res = 600)
 plot(sim)
 dev.off()
