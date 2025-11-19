@@ -196,6 +196,7 @@ env_site <- data_long1 %>%
          northness = cos(rad)) %>%
   group_by(Year, Locality) %>%
   summarise(
+    HR        = dplyr::first(HR),
     Altitude  = mean(Altitude, na.rm = TRUE),
     eastness  = mean(eastness, na.rm = TRUE),
     northness = mean(northness, na.rm = TRUE),

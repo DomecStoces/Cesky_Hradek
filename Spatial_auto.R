@@ -41,15 +41,17 @@ library(sf)
 coords_sf <- st_as_sf(coords, coords = c("Longitude", "Latitude"), crs = 4326)
 coords_utm <- st_transform(coords_sf, crs = 32633)  # UTM zone 33N (for Czech Republic)
 coords_xy <- st_coordinates(coords_utm)
-coords <- bind_cols(coords, as.data.frame(coords_xy))
-names(coords)[4:5] <- c("X", "Y")
+coords_clean <- coords_utm %>%
+  st_drop_geometry() %>%          
+  mutate(
+    X = coords_xy[, 1],
+    Y = coords_xy[, 2]
+  ) %>%
+  select(Locality, X, Y) 
 cwm_clean <- cwm_clean %>% mutate(Locality = as.character(Locality))
-coords    <- coords    %>% mutate(Locality = as.character(Locality))
+coords_clean <- coords_clean %>% mutate(Locality = as.character(Locality))
 cwm_clean <- cwm_clean %>%
-  left_join(coords[, c("Locality", "X", "Y")], by = "Locality")
-
-setdiff(unique(cwm_clean$Locality), unique(coords$Locality))
-setdiff(unique(coords$Locality), unique(cwm_clean$Locality))
+  left_join(coords_clean, by = "Locality")
 summary(cwm_clean[, c("X", "Y")])
 
 # GAM due to Moran’s I; this removes spatial autocorrelation.
@@ -60,11 +62,12 @@ df <- cwm_clean %>%
   transmute(
     Year=factor(Year),
     Locality = factor(Locality),
+    HR = as.numeric(HR),
     Exposition2 = as.numeric(scale(Exposition2)),
     Altitude_scaled, Altitude_scaled2,
     X_km = (X - mean(X, na.rm = TRUE))/1000,
     Y_km = (Y - mean(Y, na.rm = TRUE))/1000,
-    Moisture_cwm, Wings_cwm, Distribution_cwm01, Body_cwm,
+    Moisture_cwm, Wings_cwm, Distribution_cwm, Body_cwm,
     Bioindication_cwm, Breeding_cwm, Dietary_cwm
   ) %>% na.omit()
 df <- df %>%
@@ -81,8 +84,7 @@ k_xy <- max(6, min(10, nrow(dplyr::distinct(df, X_km, Y_km)) - 1))
 mod_pure <- gam(
   Wings_cwm ~ s(X_km, Y_km, bs = "tp", k = k_xy) +
     s(Altitude_scaled, bs = "cr", k = 3) +
-    s(Year, bs = "re") +
-    Exposition2 +
+    s(Year, bs = "re") + s(HR,bs="cr",k=4) + Exposition2 +
     s(Locality, bs = "re"),
   data = df,
   family = betar(),
@@ -98,11 +100,9 @@ df <- df |>
   )
 
 mod_gam1 <- gam(
-  Wings_cwm ~
-    s(X_km, Y_km, bs = "tp", k = k_xy) +
-    s(Altitude_scaled, bs = "cr", k = 3) +   
-    s(Year, bs = "re") +
-    Exposition2 +
+  Distribution_cwm ~ s(X_km, Y_km, bs = "tp", k = k_xy) + 
+    s(Altitude_scaled, bs = "cr", k = 3) + Exposition2 +
+    s(Year, bs = "re") +  +
     s(Locality, bs = "re") +
     offset(qlogis(mu0)),
   data = df, family = betar(), method = "REML"
@@ -111,7 +111,6 @@ mod_gam1 <- gam(
 summary(mod_gam1)
 gam.check(mod_gam1)
 
-,family = betar()
 library(DHARMa)
 library(qgam)
 library(mgcViz)
