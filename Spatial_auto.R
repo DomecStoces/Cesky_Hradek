@@ -100,7 +100,7 @@ df <- df |>
   )
 
 mod_gam1 <- gam(
-  Distribution_cwm ~ s(X_km, Y_km, bs = "tp", k = k_xy) + 
+  Moisture_cwm ~ s(X_km, Y_km, bs = "tp", k = k_xy) + 
     s(Altitude_scaled, bs = "cr", k = 3) + Exposition2 +
     s(Year, bs = "re") +  +
     s(Locality, bs = "re") +
@@ -137,7 +137,7 @@ plot(vg, main = "Residual variogram (Pearson)")
 
 
 
-tiff('DHARMa_Distribution.tiff', units = "in", width = 8, height = 6, res = 600)
+tiff('DHARMa_Moisture.tiff', units = "in", width = 8, height = 6, res = 600)
 plot(sim)
 dev.off()
 

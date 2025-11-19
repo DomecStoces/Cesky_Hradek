@@ -270,21 +270,31 @@ coef_test(mod1, vcov = V)
 
 # Correlation among CWMs 
 library(corrplot)
-corrplot(cor(cwm_results[, c("Wings_cwm", "Distribution_cwm01")],
-             use = "complete.obs"), method = "color", tl.col = "black")
-mod_cwm <- lm(Altitude ~ Wings_cwm+Moisture_cwm + Distribution_cwm, data = cwm_results)
+corrplot(
+  cor(cwm_results[, c("Wings_cwm", "Distribution_cwm", "Moisture_cwm")],
+      method = "spearman", use = "pairwise.complete.obs"),
+  method = "color",
+  tl.col = "black",
+  tl.cex = 1.2,
+  addCoef.col = "black",
+  number.cex = 1.2,
+  col = colorRampPalette(c("#2166AC","#FFFFFF","#B2182B"))(200)
+)
+mod_cwm <- lm(Altitude_scaled^2 ~ Wings_cwm+Moisture_cwm + Distribution_cwm, data = cwm_clean)
 vif(mod_cwm)
-
-# Correlation matrix or PCA of CWMs
-# pairwise correlations or perform a PCA on the CWM matrix to see if traits show a shared gradient across sites:
-cwm_mat <- cwm_clean[, c("Distribution_cwm", "Wings_cwm")]
-cor(cwm_mat, use = "pairwise.complete.obs", method = "spearman")
-corrplot(cor(cwm_mat), method = "color", tl.col = "black")
 
 # or PCA
 library(FactoMineR)
-res.pca <- PCA(cwm_mat, graph = TRUE)
-
+library(factoextra)
+cwm_mat3 <- cwm_clean %>%
+  select(Wings_cwm, Distribution_cwm, Moisture_cwm) %>%
+  na.omit() 
+res.pca3 <- PCA(cwm_mat3, scale.unit = TRUE, graph = FALSE)
+fviz_pca_var(
+  res.pca3,
+  repel  = TRUE,     
+  col.var = "black"  
+)
 # How CWMs jointly respond to environment?
 # the overall trait–environment concordance
 library(vegan)
@@ -293,16 +303,22 @@ anova(rda_cwm, permutations = 999)
 anova(rda_cwm, by = "axis", permutations = 999)
 
 # Mantel test of two CWMs
-mantel(
-  dist(cwm_clean$Distribution_cwm01),
-  dist(cwm_clean$Wings_cwm),
-  method = "spearman",
-  permutations = 999
-)
+# Distances
+d_dist  <- dist(cwm_clean$Distribution_cwm)
+d_wings <- dist(cwm_clean$Wings_cwm)
+d_moist <- dist(cwm_clean$Moisture_cwm)
+
+mantel(d_dist, d_wings, method = "spearman", permutations = 999)
+mantel(d_dist, d_moist, method = "spearman", permutations = 999)
+mantel(d_wings, d_moist, method = "spearman", permutations = 999)
 # Methods: The independence among significant CWMs was tested using a Mantel test (Spearman’s ρ, 999 permutations), which showed no significant correlation between Moisture_cwm and Distribution_cwm (ρ = 0.04, p = 0.17), indicating that the traits describe distinct ecological gradients.
 
 tiff('PCA.tiff', units="in", width=5, height=5, res=600)
-res.pca <- PCA(cwm_mat, graph = TRUE)
+fviz_pca_var(
+  res.pca3,
+  repel  = TRUE,     
+  col.var = "black"  
+)
 dev.off()
 
 # Graphical representation of the relationship between Altitude and CWMs
