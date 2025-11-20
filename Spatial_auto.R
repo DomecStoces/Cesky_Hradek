@@ -62,7 +62,6 @@ df <- cwm_clean %>%
   transmute(
     Year=factor(Year),
     Locality = factor(Locality),
-    HR = as.numeric(HR),
     Exposition2 = as.numeric(scale(Exposition2)),
     Altitude_scaled, Altitude_scaled2,
     X_km = (X - mean(X, na.rm = TRUE))/1000,
@@ -96,16 +95,17 @@ eps <- 1e-6
 df <- df |>
   dplyr::mutate(
     mu0 = 0.6 + 0.3 * exp(-(Altitude_scaled)^2 / (2 * 0.5^2)),
-    mu0 = pmin(pmax(mu0, eps), 1 - eps)
+    mu0 = pmin(pmax(mu0, eps), 1 - eps),
+    eta0 = log(-log(1 - mu0))
   )
 
 mod_gam1 <- gam(
-  Moisture_cwm ~ s(X_km, Y_km, bs = "tp", k = k_xy) + 
+  Distribution_cwm ~ s(X_km, Y_km, bs = "tp", k = k_xy) + 
     s(Altitude_scaled, bs = "cr", k = 3) + Exposition2 +
     s(Year, bs = "re") +  +
     s(Locality, bs = "re") +
     offset(qlogis(mu0)),
-  data = df, family = betar(), method = "REML"
+  data = df, family = betar(link="cloglog"), method = "REML"
 )
 
 summary(mod_gam1)
@@ -135,7 +135,7 @@ vg <- variogram(r ~ 1, data = df_res, cutoff = 40, width = 2, cressie = TRUE)
 
 plot(vg, main = "Residual variogram (Pearson)")
 
-tiff('DHARMa_Moisture.tiff', units = "in", width = 8, height = 6, res = 600)
+tiff('DHARMa_Dispersal.tiff', units = "in", width = 8, height = 6, res = 600)
 plot(sim)
 dev.off()
 

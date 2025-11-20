@@ -196,7 +196,6 @@ env_site <- data_long1 %>%
          northness = cos(rad)) %>%
   group_by(Year, Locality) %>%
   summarise(
-    HR        = dplyr::first(HR),
     Altitude  = mean(Altitude, na.rm = TRUE),
     eastness  = mean(eastness, na.rm = TRUE),
     northness = mean(northness, na.rm = TRUE),
@@ -278,7 +277,7 @@ cor_mat <- cor(
 )
 colnames(cor_mat) <- rownames(cor_mat) <- c(
   "Dispersal ability",
-  "Distribution affinity",
+  "Biogeographical affinity",
   "Moisture preference"
 )
 corrplot(
@@ -297,7 +296,7 @@ library(factoextra)
 cwm_mat3 <- cwm_clean %>%
   select(
     `Dispersal ability`   = Wings_cwm,
-    `Distribution affinity` = Distribution_cwm,
+    `Biogeographical affinity` = Distribution_cwm,
     `Moisture preference`            = Moisture_cwm
   ) %>%
   na.omit()
@@ -328,15 +327,11 @@ mantel(d_dist, d_moist, method = "spearman", permutations = 999)
 mantel(d_wings, d_moist, method = "spearman", permutations = 999)
 # Methods: The independence among significant CWMs was tested using a Mantel test (Spearman’s ρ, 999 permutations), which showed no significant correlation between Moisture_cwm and Distribution_cwm (ρ = 0.04, p = 0.17), indicating that the traits describe distinct ecological gradients.
 
-tiff('corrplot.tiff', units="in", width=7, height=6, res=600)
-corrplot(
-  cor_mat,
-  method = "color",
-  tl.col = "black",
-  tl.cex = 1.2,
-  addCoef.col = "black",
-  number.cex = 1.2,
-  col = colorRampPalette(c("#2166AC","#FFFFFF","#B2182B"))(200)
+tiff('PCA.tiff', units="in", width=7, height=6, res=600)
+fviz_pca_var(
+  res.pca3,
+  repel  = TRUE,
+  col.var = "black"
 )
 dev.off()
 

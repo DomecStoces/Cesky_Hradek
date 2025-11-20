@@ -72,7 +72,7 @@ p_resp <- ggplot() +
   ) +
   labs(
     x = "Altitude (scaled)",
-    y = "Moisture preference CWM"
+    y = "Biogeographical affinity CWM"
   ) +
   scale_x_continuous(breaks = seq(-2, 2, 1), minor_breaks = NULL) +
   scale_y_continuous(
@@ -88,12 +88,16 @@ p_resp <- ggplot() +
     axis.line        = element_line(colour = "black", linewidth = 0.6),
     axis.ticks       = element_line(colour = "black", linewidth = 0.5),
     axis.ticks.length= unit(4, "pt"),
-    axis.title       = element_text(size = 15),
-    axis.text        = element_text(colour = "black", size = 11),
+    axis.title       = element_text(size = 18),
+    axis.text        = element_text(colour = "black", size = 14),
     plot.margin      = margin(6, 8, 6, 6)
   )
 p_resp
 
-tiff('GAM_Moisture.tiff', units = "in", width = 8, height = 10, res = 600)
+tiff('GAM_.tiff', units = "in", width = 8, height = 10, res = 600)
+print(p_resp)
+dev.off()
+
+pdf("GAM_Biogeographical.pdf", width = 6, height = 7)
 print(p_resp)
 dev.off()
