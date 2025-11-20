@@ -102,7 +102,7 @@ df <- df |>
 mod_gam1 <- gam(
   Distribution_cwm ~ s(X_km, Y_km, bs = "tp", k = k_xy) + 
     s(Altitude_scaled, bs = "cr", k = 3) + Exposition2 +
-    s(Year, bs = "re") +  +
+    s(Year, bs = "re") +
     s(Locality, bs = "re") +
     offset(qlogis(mu0)),
   data = df, family = betar(link="cloglog"), method = "REML"
