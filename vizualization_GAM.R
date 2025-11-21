@@ -98,6 +98,6 @@ tiff('GAM_.tiff', units = "in", width = 8, height = 10, res = 600)
 print(p_resp)
 dev.off()
 
-pdf("GAM_Biogeographical.pdf", width = 6, height = 7)
+pdf("GAM_Distribution.pdf", width = 6, height = 7)
 print(p_resp)
 dev.off()
