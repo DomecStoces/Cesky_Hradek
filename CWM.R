@@ -191,26 +191,24 @@ data_long1 <- data_long1 %>%
     Altitude_scaled2 = Altitude_scaled^2
   )
 env_site <- data_long1 %>%
-  mutate(rad = Exposition2 * pi/180,
-         eastness = sin(rad),
-         northness = cos(rad)) %>%
   group_by(Year, Locality) %>%
   summarise(
-    Altitude  = mean(Altitude, na.rm = TRUE),
-    eastness  = mean(eastness, na.rm = TRUE),
-    northness = mean(northness, na.rm = TRUE),
+    HR         = dplyr::first(HR),
+    Altitude   = mean(Altitude, na.rm = TRUE),
+    Exposition2 = dplyr::first(Exposition2),
     .groups = "drop"
   ) %>%
   mutate(
-    # circular mean back to degrees (0–360)
-    Exposition2 = (atan2(eastness, northness) * 180/pi) %% 360,
     Altitude_scaled  = as.numeric(scale(Altitude)),
     Altitude_scaled2 = Altitude_scaled^2
   )
-
 cwm_clean <- cwm_results %>%
   left_join(env_site, by = c("Year", "Locality")) %>%
   filter(!is.na(Altitude), !is.na(Exposition2))
+
+## Check table for Exposition2 levels in each Site ID
+data_long1 %>% distinct(Locality, Exposition2) %>% arrange(as.numeric(Locality))
+
 # Fit Linear Model (LM): Because each locality represented a unique altitudinal step without replication, we used ordinary least squares with heteroscedasticity-consistent (HC3) standard errors rather than mixed-effects or bootstrap model comparison approaches.
 # Because each locality represented a unique altitudinal step without replication, we used ordinary least squares with heteroscedasticity-consistent (HC3) standard errors rather than mixed-effects or bootstrap model comparison approaches.
 mod1 <- lm(Distribution_cwm ~ poly(Altitude, 2, raw = TRUE) + Exposition2,
