@@ -145,7 +145,7 @@ data_long1 <- data_long1 %>%
                                               "Europe"           = 2,
                                               "Central Europe"   = 2,
                                               "Eurasian"         = 3,
-                                              "Holoarctic"       = 3,
+                                              "Holarctic"       = 3,
                                               "Palearctic"       = 3,
                                               "Eurosiberian"     = 3,
                                               "North Palearctic" = 4,
@@ -257,7 +257,7 @@ coef_test(mod1, vcov = V)
 
 # Interpretation
 # Distribution: The relationship between the community-weighted mean of species’ areal distribution and altitude was significant and unimodal (HC3-corrected linear term: t = −2.30, p = 0.025; quadratic term: t = 2.46, p = 0.016). This indicates that mid-elevation sites tend to host assemblages dominated by species with broader geographic ranges, whereas both low- and high-elevation sites are characterized by species with more restricted distributions. Exposition had no detectable influence (p = 0.90*)
-# the negative association in the linear term indicates that with increasing altitude there are fewer European species followed by an upward curvature suggesting that the most widespread (Palearctic or Holoarctic) taxa occur at the highest elevations.
+# the negative association in the linear term indicates that with increasing altitude there are fewer European species followed by an upward curvature suggesting that the most widespread (Palearctic or Holarctic) taxa occur at the highest elevations.
 
 
 # Body size: The model detects some altitude-related structure overall, but it’s weak and not robust at the individual term level.
