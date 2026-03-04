@@ -113,10 +113,10 @@ data_long1 <- data_long1 %>%
     # Wing morphotype
     Wing.morph = dplyr::recode(trimws(Wing.morph),
                                "A"   = 1,
-                               "A/B" = 2,
-                               "B"   = 3,
-                               "B/M" = 4,
-                               "M"   = 5,
+                               "A/B" = 1,
+                               "B"   = 2,
+                               "B/M" = 3,
+                               "M"   = 4,
                                .default = NA_real_
     ),
     
