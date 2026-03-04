@@ -145,7 +145,7 @@ data_long1 <- data_long1 %>%
                                               "Europe"           = 2,
                                               "Central Europe"   = 2,
                                               "Eurasian"         = 3,
-                                              "Holoarctic"       = 3,
+                                              "Holarctic"       = 3,
                                               "Palearctic"       = 3,
                                               "Eurosiberian"     = 3,
                                               "North Palearctic" = 4,
@@ -177,7 +177,7 @@ cwm_results <- data_long1 %>%
     Bioindication_cwm  = weighted.mean(Bioindication.group, Count, na.rm = TRUE),
     Moisture_cwm       = weighted.mean(Moisture.tolerance,  Count, na.rm = TRUE),
     Body_cwm           = weighted.mean(Body.size,           Count, na.rm = TRUE),
-    Distribution_cwm01 = weighted.mean(Areal.dist_scaled,    Count, na.rm = TRUE),
+    Distribution_cwm = weighted.mean(Areal.dist_scaled,    Count, na.rm = TRUE),
     Abundance          = sum(Count),
     .groups = "drop"
   )
@@ -191,26 +191,24 @@ data_long1 <- data_long1 %>%
     Altitude_scaled2 = Altitude_scaled^2
   )
 env_site <- data_long1 %>%
-  mutate(rad = Exposition2 * pi/180,
-         eastness = sin(rad),
-         northness = cos(rad)) %>%
   group_by(Year, Locality) %>%
   summarise(
-    Altitude  = mean(Altitude, na.rm = TRUE),
-    eastness  = mean(eastness, na.rm = TRUE),
-    northness = mean(northness, na.rm = TRUE),
+    HR         = dplyr::first(HR),
+    Altitude   = mean(Altitude, na.rm = TRUE),
+    Exposition2 = dplyr::first(Exposition2),
     .groups = "drop"
   ) %>%
   mutate(
-    # circular mean back to degrees (0–360)
-    Exposition2 = (atan2(eastness, northness) * 180/pi) %% 360,
     Altitude_scaled  = as.numeric(scale(Altitude)),
     Altitude_scaled2 = Altitude_scaled^2
   )
-
 cwm_clean <- cwm_results %>%
   left_join(env_site, by = c("Year", "Locality")) %>%
   filter(!is.na(Altitude), !is.na(Exposition2))
+
+## Check table for Exposition2 levels in each Site ID
+data_long1 %>% distinct(Locality, Exposition2) %>% arrange(as.numeric(Locality))
+
 # Fit Linear Model (LM): Because each locality represented a unique altitudinal step without replication, we used ordinary least squares with heteroscedasticity-consistent (HC3) standard errors rather than mixed-effects or bootstrap model comparison approaches.
 # Because each locality represented a unique altitudinal step without replication, we used ordinary least squares with heteroscedasticity-consistent (HC3) standard errors rather than mixed-effects or bootstrap model comparison approaches.
 mod1 <- lm(Distribution_cwm ~ poly(Altitude, 2, raw = TRUE) + Exposition2,
@@ -259,7 +257,7 @@ coef_test(mod1, vcov = V)
 
 # Interpretation
 # Distribution: The relationship between the community-weighted mean of species’ areal distribution and altitude was significant and unimodal (HC3-corrected linear term: t = −2.30, p = 0.025; quadratic term: t = 2.46, p = 0.016). This indicates that mid-elevation sites tend to host assemblages dominated by species with broader geographic ranges, whereas both low- and high-elevation sites are characterized by species with more restricted distributions. Exposition had no detectable influence (p = 0.90*)
-# the negative association in the linear term indicates that with increasing altitude there are fewer European species followed by an upward curvature suggesting that the most widespread (Palearctic or Holoarctic) taxa occur at the highest elevations.
+# the negative association in the linear term indicates that with increasing altitude there are fewer European species followed by an upward curvature suggesting that the most widespread (Palearctic or Holarctic) taxa occur at the highest elevations.
 
 
 # Body size: The model detects some altitude-related structure overall, but it’s weak and not robust at the individual term level.
@@ -267,23 +265,48 @@ coef_test(mod1, vcov = V)
 
 # Wings: The community-weighted mean of wing morphology (Wings_cwm) showed a strong nonlinear relationship with altitude (Type III ANOVA: F₂,₇₄ = 22.7, p < 0.001). Both the linear and quadratic terms of altitude remained significant when using heteroskedasticity-robust standard errors (HC3, p < 0.01) and bootstrapped confidence intervals (95% CI: linear −0.0110 to −0.0044; quadratic 3.9×10⁻⁶ to 9.1×10⁻⁶). Although tests indicated non-constant variance (Breusch–Pagan p = 0.022), the effect size and pattern were consistent across robust estimation procedures, supporting a strong altitudinal gradient in wing reduction.
 
+cwm_mat3 <- cwm_clean[, c("Wings_cwm", "Distribution_cwm", "Moisture_cwm")]
 # Correlation among CWMs 
 library(corrplot)
-corrplot(cor(cwm_results[, c("Wings_cwm", "Distribution_cwm01")],
-             use = "complete.obs"), method = "color", tl.col = "black")
-mod_cwm <- lm(Altitude ~ Wings_cwm+Moisture_cwm + Distribution_cwm, data = cwm_results)
-vif(mod_cwm)
-
-# Correlation matrix or PCA of CWMs
-# pairwise correlations or perform a PCA on the CWM matrix to see if traits show a shared gradient across sites:
-cwm_mat <- cwm_clean[, c("Distribution_cwm01", "Wings_cwm")]
-cor(cwm_mat, use = "pairwise.complete.obs", method = "spearman")
-corrplot(cor(cwm_mat), method = "color", tl.col = "black")
+cor_mat <- cor(
+  cwm_results[, c("Wings_cwm", "Distribution_cwm", "Moisture_cwm")],
+  method = "spearman",
+  use = "pairwise.complete.obs"
+)
+colnames(cor_mat) <- rownames(cor_mat) <- c(
+  "Dispersal ability",
+  "Biogeographical affinity",
+  "Moisture preference"
+)
+corrplot(
+  cor_mat,
+  method = "color",
+  tl.col = "black",
+  tl.cex = 1.2,
+  addCoef.col = "black",
+  number.cex = 1.2,
+  col = colorRampPalette(c("#2166AC","#FFFFFF","#B2182B"))(200)
+)
 
 # or PCA
 library(FactoMineR)
-res.pca <- PCA(cwm_mat, graph = TRUE)
+library(factoextra)
+cwm_mat3 <- cwm_clean %>%
+  select(
+    `Dispersal ability`   = Wings_cwm,
+    `Biogeographical affinity` = Distribution_cwm,
+    `Moisture preference`            = Moisture_cwm
+  ) %>%
+  na.omit()
+res.pca3 <- PCA(cwm_mat3, scale.unit = TRUE, graph = FALSE)
+fviz_pca_var(
+  res.pca3,
+  repel  = TRUE,
+  col.var = "black"
+)
 
+loadings <- res.pca3$var$coord
+loadings
 # How CWMs jointly respond to environment?
 # the overall trait–environment concordance
 library(vegan)
@@ -292,19 +315,21 @@ anova(rda_cwm, permutations = 999)
 anova(rda_cwm, by = "axis", permutations = 999)
 
 # Mantel test of two CWMs
-mantel(
-  dist(cwm_clean$Distribution_cwm01),
-  dist(cwm_clean$Wings_cwm),
-  method = "spearman",
-  permutations = 999
-)
+# Distances
+d_dist  <- dist(cwm_clean$Distribution_cwm)
+d_wings <- dist(cwm_clean$Wings_cwm)
+d_moist <- dist(cwm_clean$Moisture_cwm)
+
+mantel(d_dist, d_wings, method = "spearman", permutations = 999)
+mantel(d_dist, d_moist, method = "spearman", permutations = 999)
+mantel(d_wings, d_moist, method = "spearman", permutations = 999)
 # Methods: The independence among significant CWMs was tested using a Mantel test (Spearman’s ρ, 999 permutations), which showed no significant correlation between Moisture_cwm and Distribution_cwm (ρ = 0.04, p = 0.17), indicating that the traits describe distinct ecological gradients.
 
-tiff('PCA.tiff', units="in", width=5, height=8, res=600)
-res.pca <- PCA(cwm_mat, graph = TRUE)
+tiff('PCA.tiff', units="in", width=7, height=6, res=600)
+fviz_pca_var(
+  res.pca3,
+  repel  = TRUE,
+  col.var = "black"
+)
 dev.off()
 
-# Graphical representation of the relationship between Altitude and CWMs
-library(ggplot2)
-ggplot(cwm_clean, aes(Altitude, Wings_cwm)) +
-  geom_point() + geom_smooth(method = "gam", formula = y ~ s(x, k = 4))

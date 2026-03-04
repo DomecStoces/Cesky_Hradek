@@ -40,32 +40,3 @@ ggplot(data_long1, aes(x = Altitude, y = Abundance)) +
   labs(
     x = "Altitude (m a.s.l.)",
     y = "Abundance")
-
-library(mgcv)
-
-mod_gam <- gam(
-  Species_richness ~ s(Altitude, k = 5) + Exposition2 +
-    s(Locality, bs = "re") + s(Sequence, bs = "re"),
-  family = nb(),
-  data = data_long1,
-  method = "REML"
-)
-summary(mod_gam)
-
-mod_gam1 <- gam(
-  Species_richness ~ s(Altitude, k = 5) + EK + s(HR, k = 5) + Exposition2 +
-    s(Locality, bs = "re") + s(Sequence, bs = "re"),
-  family = nb(),
-  data = data_long1,
-  method = "REML"
-)
-summary(mod_gam1)
-
-mod_gam2 <- gam(
-  Species_richness ~ SLT + Exposition2 +
-    s(Locality, bs = "re") + s(Sequence, bs = "re"),
-  family = nb(),
-  data = data_long1,
-  method = "REML"
-)
-summary(mod_gam2)

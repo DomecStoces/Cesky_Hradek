@@ -2,6 +2,9 @@ library(dplyr)
 library(stringr)
 library(sf)
 library(leaflet)
+library(ggplot2)
+library(ggthemes)
+library(elevatr)
 
 # Include Altitude in tibble format
 dat_raw <- tibble::tribble(
@@ -80,7 +83,8 @@ library(ggplot2)
 library(rnaturalearth)
 library(rnaturalearthdata)
 library(ggrepel)
-
+library(grid)
+library(terra)
 # A panel with overall Europe with Czech republic highlighted
 #####
 # Load Europe and Czech Republic polygons
@@ -158,14 +162,15 @@ p_central_labels <- ggplot() +
   ggrepel::geom_text_repel(
     data = label_df,
     aes(x = X, y = Y, label = iso_a2),
-    size = 3,
+    size = 5.2,                
     fontface = "bold",
     color = "black",
-    segment.size = 0.2,
-    min.segment.length = 0
+    segment.size = 0.25,
+    min.segment.length = 0,
+    max.overlaps = Inf        
   ) +
   coord_sf(xlim = xlim, ylim = ylim, expand = FALSE) +
-  theme_map
+  theme_map()
 
 p_central_labels
 
@@ -182,39 +187,48 @@ dev.off()
 # Download basemaps
 eu <- ne_countries(scale = "medium", continent = "Europe", returnclass = "sf")
 cz <- eu %>% filter(admin == "Czechia")
-crs_plot <- 3035
+
+crs_plot <- 3035  # ETRS89 / LAEA Europe
+
 eu_p  <- st_transform(eu, crs_plot)
 cz_p  <- st_transform(cz, crs_plot)
 pts_p <- st_transform(pts, crs_plot)
 
-eu
-# Use the centroid of your sites as before
-center_p <- st_centroid(st_union(pts_p))
+#pad <- 0.10              
+#bb  <- st_bbox(pts_p)     
+#xr  <- as.numeric(bb["xmax"] - bb["xmin"])
+#yr  <- as.numeric(bb["ymax"] - bb["ymin"])
 
-# Define half-size of the square (in km)
-half_size_km <- 35     # adjust as needed
-half_size_m  <- half_size_km * 1000
-
-# Convert center to numeric coordinates
-cx <- st_coordinates(center_p)[1,1]
-cy <- st_coordinates(center_p)[1,2]
+#bb_exp <- st_bbox(
+#  c(
+#    xmin = as.numeric(bb["xmin"]) - pad * xr,
+#    ymin = as.numeric(bb["ymin"]) - pad * yr,
+#    xmax = as.numeric(bb["xmax"]) + pad * xr,
+#    ymax = as.numeric(bb["ymax"]) + pad * yr
+#  ),
+#  crs = st_crs(pts_p)
+#)
 
 # Create a square polygon centered on the site cluster
-square_mat <- matrix(c(
-  cx - half_size_m, cy - half_size_m,
-  cx + half_size_m, cy - half_size_m,
-  cx + half_size_m, cy + half_size_m,
-  cx - half_size_m, cy + half_size_m,
-  cx - half_size_m, cy - half_size_m
-), ncol = 2, byrow = TRUE)
+square_mat <- matrix(
+  c(
+    bb_exp["xmin"], bb_exp["ymin"],
+    bb_exp["xmax"], bb_exp["ymin"],
+    bb_exp["xmax"], bb_exp["ymax"],
+    bb_exp["xmin"], bb_exp["ymax"],
+    bb_exp["xmin"], bb_exp["ymin"]
+  ),
+  ncol = 2,
+  byrow = TRUE
+)
 
-square_p <- st_polygon(list(square_mat)) |> 
-  st_sfc(crs = st_crs(pts_p))
+square_p <- st_sfc(st_polygon(list(square_mat)), crs = st_crs(pts_p))
 
 # Czech overview map with square highlight
 p_cz_overview <- ggplot() +
   geom_sf(data = cz_p, fill = "grey95", color = "grey50", linewidth = 0.25) +
-  geom_sf(data = square_p, fill = "grey70", color = "grey30", alpha = 0.3, linewidth = 0.4) +
+  geom_sf(data = square_p, fill = "grey70", color = "grey30",
+          alpha = 0.3, linewidth = 0.4) +
   theme_void()
 tiff('p_cz_overview.tiff', units = "in", width = 8, height = 10, res = 600)
 p_cz_overview
@@ -226,48 +240,112 @@ dev.off()
 #####
 # B panel with describtions
 #####
+library(sf)
+library(terra)
+library(ggplot2)
+library(ggrepel)
+library(grid)
+library(elevatr)
+
+## 0) Window around your elevational gradient -------------------------
+
 pad <- 0.10
 bb  <- st_bbox(circle_p)
-xr <- as.numeric(bb["xmax"] - bb["xmin"])
-yr <- as.numeric(bb["ymax"] - bb["ymin"])
+xr  <- as.numeric(bb["xmax"] - bb["xmin"])
+yr  <- as.numeric(bb["ymax"] - bb["ymin"])
+
 bb_exp <- st_bbox(
-  c(xmin = as.numeric(bb["xmin"]) - pad*xr,
-    ymin = as.numeric(bb["ymin"]) - pad*yr,
-    xmax = as.numeric(bb["xmax"]) + pad*xr,
-    ymax = as.numeric(bb["ymax"]) + pad*yr),
+  c(
+    xmin = as.numeric(bb["xmin"]) - pad * xr,
+    ymin = as.numeric(bb["ymin"]) - pad * yr,
+    xmax = as.numeric(bb["xmax"]) + pad * xr,
+    ymax = as.numeric(bb["ymax"]) + pad * yr
+  ),
   crs = st_crs(circle_p)
 )
-win <- st_as_sfc(bb_exp)
 
-line_p <- st_cast(st_combine(pts_p), "LINESTRING")
+win    <- st_as_sfc(bb_exp)
+win_sf <- st_as_sf(win)
+
+
+## 1) DEM + hillshade -------------------------------------------------
+
+# if you don't already have `dem`:
+win_wgs <- st_transform(win_sf, 4326)
+
+dem_r <- get_elev_raster(
+  locations = win_wgs,
+  z         = 12,          # tweak zoom as needed
+  clip      = "locations"
+)
+
+dem <- rast(dem_r)
+
+# download
+dem_win <- dem |>
+  project(st_crs(pts_p)$wkt) |>
+  crop(vect(win))
+
+slope   <- terrain(dem_win, v = "slope",  unit = "radians")
+aspect  <- terrain(dem_win, v = "aspect", unit = "radians")
+hill    <- shade(slope, aspect, angle = 40, direction = 315)
+
+## 2) Vector layers clipped to window ---------------------------------
+hill_small <- aggregate(hill, fact = 3, fun = mean)
+
+hill_df <- as.data.frame(hill_small, xy = TRUE, na.rm = TRUE)
+names(hill_df)[3] <- "hillshade"
+line_p   <- st_cast(st_combine(pts_p), "LINESTRING")
 cz_win   <- st_crop(cz_p,  win)
 line_win <- suppressWarnings(st_intersection(line_p, win))
-pts_win  <- pts_p[ st_within(pts_p, win, sparse = FALSE), ]
+pts_win  <- pts_p[st_within(pts_p, win, sparse = FALSE), ]
+
+## 3) Plot ------------------------------------------------------------
 
 p_cz_detail <- ggplot() +
-  geom_sf(data = cz_win,   fill = "grey98", color = "grey70", linewidth = 0.2) +
-  geom_sf(data = line_win, color = "grey40", linewidth = 0.5) +
-  geom_sf(data = pts_win,  size = 2.2, color = "black") +
+  geom_raster(
+    data = hill_df,
+    aes(x = x, y = y, fill = hillshade)
+  ) +
+  scale_fill_gradientn(
+    colours = gray.colors(50, start = 0.98, end = 0.05),
+    guide = "none"
+  ) +
+  geom_sf(data = cz_win,   fill = NA, color = "black", linewidth = 1.0) +
+  geom_sf(data = line_win, color = "grey30", linewidth = 1.7) +
+  geom_sf(data = pts_win,  size = 2.8, color = "black") +
   ggrepel::geom_label_repel(
-    data = cbind(sf::st_drop_geometry(pts_win), sf::st_coordinates(pts_win)),
+    data = cbind(st_drop_geometry(pts_win), st_coordinates(pts_win)),
     aes(
       X, Y,
       label = sprintf("%s.\n%dm\n%s", Locality, Altitude, Exposition)
     ),
-    size = 2.6, label.size = 0.15, label.padding = unit(0.08, "lines")
+    size = 4.0,
+    label.size = 0.2,
+    label.padding = unit(0.2, "lines"),
+    label.r = unit(0.15, "lines"),
+    box.padding = 1.3,
+    min.segment.length = 0,
+    max.overlaps = Inf
   ) +
-  coord_sf(xlim = c(bb_exp["xmin"], bb_exp["xmax"]),
-           ylim = c(bb_exp["ymin"], bb_exp["ymax"]),
-           expand = FALSE) +
+  coord_sf(
+    xlim   = c(bb_exp["xmin"], bb_exp["xmax"]),
+    ylim   = c(bb_exp["ymin"], bb_exp["ymax"]),
+    expand = FALSE
+  ) +
   theme_void()
 
-p_cz_overview
 p_cz_detail
-
-tiff('p_cz_overview.tiff', units = "in", width = 8, height = 10, res = 600)
 p_cz_overview
+
+tiff('p_cz_detail.tiff', units = "in", width = 8, height = 10, res = 600)
+p_cz_detail
 dev.off()
 
-pdf("p_cz_detail.pdf", width = 8, height = 10)
+pdf("p_cz_detail.pdf", width = 7, height = 9)
 p_cz_detail
+dev.off()
+
+pdf("pz.pdf", width = 7, height = 9)
+pz
 dev.off()
