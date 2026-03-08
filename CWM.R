@@ -114,9 +114,15 @@ data_long1 <- data_long1 %>%
     Wing.morph = dplyr::recode(trimws(Wing.morph),
                                "A"   = 1,
                                "A/B" = 1,
+<<<<<<< HEAD
                                "B"   = 1,
                                "B/M" = 2,
                                "M"   = 3,
+=======
+                               "B"   = 2,
+                               "B/M" = 3,
+                               "M"   = 4,
+>>>>>>> 92695b6e863f10276bbb94680f80a3fab191da75
                                .default = NA_real_
     ),
     
