@@ -98,25 +98,35 @@ df <- df |>
     mu0  = pmin(pmax(mu0, eps), 1 - eps),
     eta0 = log(-log(1 - mu0))
   )
+offset(eta0)
+
+N <- nrow(df)
+df$Wings_cwm_scaled <- (df$Wings_cwm * (N - 1) + 0.5) / N
+df$Dietary_cwm_scaled <- (df$Dietary_cwm * (N - 1) + 0.5) / N
+df$Breeding_cwm_scaled <- (df$Breeding_cwm * (N - 1) + 0.5) / N
 
 mod_gam1 <- gam(
-  Moisture_cwm ~ 
-    s(X_km, Y_km, bs = "tp", k = k_xy) + 
-    s(Altitude_scaled, bs = "cr", k = 3) + Exposition2 +
-    s(Year, bs = "re") +
+  Distribution_cwm  ~ 
     s(Locality, bs = "re") +
-    offset(eta0),
+    s(Altitude_scaled, bs = "cr", k = 3) + Exposition2 +
+    s(Year, bs = "re"),
   data   = df,
-  family = betar(link="cloglog"),
+  family = betar(link = "cloglog"),
   method = "REML"
 )
 
+
+
+s(X_km, Y_km, bs = "tp", k = k_xy)
+s(Altitude_scaled, bs = "cr", k = 3)
+s(Locality, bs = "re")
+
 summary(mod_gam1)
+par(mfrow = c(2, 2))
 gam.check(mod_gam1)
 concurvity(mod_gam1, full = TRUE)
 gratia::draw(mod_gam1)
-
-
+plot(mod_gam1, select = 2)
 
 library(DHARMa)
 library(qgam)
@@ -128,22 +138,22 @@ plot(sim, qgam = TRUE)
 library(gstat)
 library(sp)
 
-# 1) Numeric residuals (use a NEW name)
-r_pearson <- residuals(mod_gam1, type = "pearson")  # length should be 72
+# Residuals averaged per site to resolve the overlapping temporal data
+res_dharma <- simulateResiduals(fittedModel = mod_gam3)
+df$res_scaled <- res_dharma$scaledResiduals
+df_site_res <- df %>%
+  group_by(Locality, X_km, Y_km) %>%
+  summarise(mean_res = mean(res_scaled, na.rm = TRUE), .groups = 'drop')
 
-# 2) Bind to df and convert to spatial
-df_res <- df
-df_res$r <- r_pearson
+# Convert the summarized site data to a spatial object
+coordinates(df_site_res) <- ~ X_km + Y_km
 
-coordinates(df_res) <- ~ X_km + Y_km   # coords already in km; CRS not required for variogram
+# Empirical variogram using the averaged DHARMa residuals
+vg <- variogram(mean_res ~ 1, data = df_site_res, cutoff = 40, width = 2, cressie = TRUE)
+plot(vg, main = "Residual Variogram")
 
-# 3) Empirical variogram (robust; sensible bins)
-vg <- variogram(r ~ 1, data = df_res, cutoff = 40, width = 2, cressie = TRUE)
-
-plot(vg, main = "Residual variogram (Pearson)")
-
-tiff('DHARMa_Moisture.tiff', units = "in", width = 8, height = 6, res = 600)
-plot(sim)
+tiff('Variogram_Wings.tiff', units = "in", width = 8, height = 6, res = 600)
+plot(vg, main = "Residual Variogram")
 dev.off()
 
 # Plotting the effect of Altitude_scaled on CWM traits from mod_gam1

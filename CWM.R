@@ -95,11 +95,11 @@ data_long1 <- data_long1 %>%
   mutate(
     # Dietary
     Dietary = dplyr::recode(trimws(Dietary),
-                            "Predator"  = 1,
-                            "Granivor"  = 2,
-                            "Granivore" = 2,
-                            "Omnivor"   = 3,
-                            "Omnivore"  = 3,
+                            "Granivor"  = 1,
+                            "Granivore" = 1,
+                            "Omnivor"   = 2,
+                            "Omnivore"  = 2,
+                            "Predator"  = 3,
                             .default    = NA_real_
     ),
     
@@ -113,10 +113,10 @@ data_long1 <- data_long1 %>%
     # Wing morphotype
     Wing.morph = dplyr::recode(trimws(Wing.morph),
                                "A"   = 1,
-                               "A/B" = 2,
-                               "B"   = 3,
-                               "B/M" = 4,
-                               "M"   = 5,
+                               "A/B" = 1,
+                               "B"   = 1,
+                               "B/M" = 2,
+                               "M"   = 3,
                                .default = NA_real_
     ),
     
