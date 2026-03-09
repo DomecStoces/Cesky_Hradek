@@ -54,15 +54,8 @@ coords_clean <- coords_utm %>%
     Y = st_coordinates(.)[, 2]
   ) %>%
   st_drop_geometry() %>%
-  transmute(
-    Locality = as.character(Locality),
-    X, Y
-  )
-cwm_clean <- cwm_clean %>%
-  mutate(Locality = as.character(Locality)) %>%
-  left_join(coords_clean, by = "Locality")
-names(cwm_clean)          
-summary(cwm_clean[, c("X", "Y")])
+  dplyr::select(Locality, X, Y)
+cwm_clean <- cwm_clean %>% left_join(coords_clean, by = "Locality")
 
 # GAM due to Moran’s I; this removes spatial autocorrelation.
 library(dplyr)
@@ -72,21 +65,22 @@ df <- cwm_clean %>%
   transmute(
     Year      = factor(Year),
     Locality  = factor(Locality),
-    HR        = factor(HR),
-    Exposition2_raw = Exposition2,
-    Exposition2     = as.numeric(scale(Exposition2)),
     
-    Altitude_scaled, Altitude_scaled2,
-    X_km = (X - mean(X, na.rm = TRUE))/1000,
-    Y_km = (Y - mean(Y, na.rm = TRUE))/1000,
-    Moisture_cwm, Wings_cwm, Distribution_cwm, Body_cwm,
+    # Major 7: Simplified GAM preparation step
+    Exposition2 = scale(as.numeric(sub(",", ".", Exposition2))),
+    
+    Altitude_scaled, 
+    Altitude_scaled2,
+    
+    X_km = (X - mean(X, na.rm = TRUE)) / 1000,
+    Y_km = (Y - mean(Y, na.rm = TRUE)) / 1000,
+    
+    Moisture_cwm, Wings_cwm, Distribution_cwm, Body_size_cwm,
     Bioindication_cwm, Breeding_cwm, Dietary_cwm
   ) %>%
-  na.omit()
-# confirm:
-stopifnot(is.numeric(df$Exposition2))
+  tidyr::drop_na() 
 
-# choose appropriate k (<= unique sites)
+# Calculate adaptive basis dimension (k)
 k_xy <- max(6, min(10, nrow(dplyr::distinct(df, X_km, Y_km)) - 1))
 
 # GAM: simpler polynomial representation is preferred for interpretability and model parsimony than smooth term of Altitude.
@@ -104,9 +98,10 @@ N <- nrow(df)
 df$Wings_cwm_scaled <- (df$Wings_cwm * (N - 1) + 0.5) / N
 df$Dietary_cwm_scaled <- (df$Dietary_cwm * (N - 1) + 0.5) / N
 df$Breeding_cwm_scaled <- (df$Breeding_cwm * (N - 1) + 0.5) / N
+df$Distribution_cwm_scaled <- (df$Distribution_cwm * (N - 1) + 0.5) / N
 
 mod_gam1 <- gam(
-  Distribution_cwm  ~ 
+  Moisture_cwm ~ 
     s(Locality, bs = "re") +
     s(Altitude_scaled, bs = "cr", k = 3) + Exposition2 +
     s(Year, bs = "re"),
