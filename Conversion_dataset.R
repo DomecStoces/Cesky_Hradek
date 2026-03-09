@@ -20,37 +20,21 @@ data_long <- data %>%
   pivot_longer(
     cols = all_of(species_cols),
     names_to = "Species",
-    values_to = "Count"
+    values_to = "Abundance"
   ) %>%
-  filter(!is.na(Count) & Count > 0)
+  filter(!is.na(Abundance) & Abundance > 0)
 
 # Save as new Excel file
 write_xlsx(data_long, "data_long.xlsx")
 head(data_long)
 
-data_long <- data_long %>%
-  mutate(
-    FRic = as.numeric(FRic),
-    FEve = as.numeric(FEve),
-    FDiv = as.numeric(FDiv)
-  )
-data_long <- data_long %>%
-  mutate(across(
-    where(~ all(is.na(.) | grepl("^-?[0-9.]+$", .))),
-    as.numeric
-  ))
-data_long %>%
-  filter(!grepl("^-?[0-9.]+$", FRic) & !is.na(FRic)) %>%
-  distinct(FRic)
-str(data_long)
+# Add traits to dataset
+traits1 <- read_excel("traits.xlsx")
+final_data <- data_long %>%
+  left_join(traits1, by = c("Species" = "Acronym"))
+head(final_data)
+write_xlsx(final_data, "final_data.xlsx")
 
-# Add traits to long format dataset 
-traits1 <- traits1 %>%
-  mutate(Species = gsub(" ", "_", Species))
-
-data_long1 <- data_long1 %>%
-  mutate(Species = gsub(" ", "_", Species)) %>% 
-  left_join(traits1, by = "Species")
 
 # Add environemntal conditions from clima-station Nová Ves v Horách (U1NOVE1)
 data_long1 <- data_long1 %>%
