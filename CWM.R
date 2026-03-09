@@ -1,4 +1,4 @@
-data_long1 <- read_excel("data_long1.xlsx")
+data_long1 <- read_excel("data_long.xlsx", sheet = "Sheet1")
 
 # Fourth corner analysis
 library(readxl)
@@ -96,9 +96,7 @@ data_long1 <- data_long1 %>%
     # Dietary
     Dietary = dplyr::recode(trimws(Dietary),
                             "Granivor"  = 1,
-                            "Granivore" = 1,
                             "Omnivor"   = 2,
-                            "Omnivore"  = 2,
                             "Predator"  = 3,
                             .default    = NA_real_
     ),
