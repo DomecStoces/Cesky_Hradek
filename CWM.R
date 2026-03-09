@@ -1,4 +1,4 @@
-data_long1 <- read_excel("data_long.xlsx", sheet = "Sheet1")
+data_long1 <- read_excel("data_long1.xlsx", sheet = "Sheet1")
 
 # Fourth corner analysis
 library(readxl)
@@ -109,7 +109,7 @@ data_long1 <- data_long1 %>%
     ),
     
     # Wing morphotype
-    Wing.morph = dplyr::recode(trimws(Wing.morph),
+    Wing.morh = dplyr::recode(trimws(Wing.morh),
                                "A"   = 1,
                                "A/B" = 1,
                                "B"   = 1,
