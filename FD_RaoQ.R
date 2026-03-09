@@ -47,10 +47,7 @@ concurvity(mod_gam1, full = TRUE)
 gratia::draw(mod_gam1)
 plot(mod_gam1, select = 2)
 
-plot(mod_gam1, 
-     select = 2,           
-     shade = TRUE,         
-     residuals = TRUE,     
-     pch = 1, cex = 0.5, 
-     col = "darkgreen", 
-     main = "Effect of Altitude on Rao's Q")
+plot(mod_gam1, select = 2, shade = TRUE, residuals = TRUE, 
+     pch = 1, cex = 0.5, col = "black",
+     ylim = c(-1, 1),
+     main = "Effect of Altitude on Rao's Q (Zoomed)")
