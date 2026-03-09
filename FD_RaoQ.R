@@ -51,3 +51,14 @@ plot(mod_gam1, select = 2, shade = TRUE, residuals = TRUE,
      pch = 1, cex = 0.5, col = "black",
      ylim = c(-1, 1),
      main = "Effect of Altitude on Rao's Q (Zoomed)")
+
+### CWMs calculated in fundiversity ###
+trait_df <- as.data.frame(traits_data)
+trait_df$species <- rownames(trait_df)
+
+sp_df <- as.data.frame(sp_mat)
+sp_df$site <- rownames(sp_df)
+
+df <- merge(df, cwm_results, by.x = "row.names", by.y = "site")
+rownames(df) <- df$Row.names
+df$Row.names <- NULL
