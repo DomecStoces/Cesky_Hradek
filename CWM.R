@@ -96,41 +96,60 @@ data_long1$Locality <- as.character(data_long1$Locality)
 
 data_long1 <- data_long1 %>%
   mutate(
-    Dietary = scales::rescale(dplyr::recode(trimws(Dietary),
-                                            "Granivor" = 1, "Omnivor"  = 2, "Predator" = 3,
-                                            .default   = NA_real_
-    ), to = c(0, 1)),
     
-    Breeding = scales::rescale(dplyr::recode(trimws(Breeding),
-                                             "Spring" = 1, "Autumn" = 2,
+    # Dietary (1–3): Max-Min = 2
+    Dietary = (dplyr::recode(trimws(Dietary),
+                             "Granivor" = 1,
+                             "Omnivor"  = 2,
+                             "Predator" = 3,
+                             .default   = NA_real_) - 1) / 2,
+    
+    # Breeding (1–2): Max-Min = 1
+    Breeding = (dplyr::recode(trimws(Breeding),
+                              "Spring" = 1,
+                              "Autumn" = 2,
+                              .default = NA_real_) - 1) / 1,
+    
+    # Wings (1–3): Max-Min = 2
+    Wings = (dplyr::recode(trimws(Wing.morph),
+                           "A"   = 1,
+                           "A/B" = 1,
+                           "B"   = 1,
+                           "B/M" = 2,
+                           "M"   = 3,
+                           .default = NA_real_) - 1) / 2,
+    
+    # Bioindication (1–3): Max-Min = 2
+    Bioindication = (dplyr::recode(trimws(Bioindication.group),
+                                   "E" = 1,
+                                   "A" = 2,
+                                   "R" = 3,
+                                   .default = NA_real_) - 1) / 2,
+    
+    # Moisture (1–5): Max-Min = 4
+    Moisture = (dplyr::recode(trimws(Moisture.tolerance),
+                              "X" = 1,
+                              "S" = 2,
+                              "I" = 3,
+                              "V" = 4,
+                              "H" = 5,
+                              .default = NA_real_) - 1) / 4,
+    
+    # Distribution (1–5): Max-Min = 4
+    Distribution = (as.numeric(dplyr::recode(as.character(trimws(Areal.distribution)),
+                                             "South Palearctic" = 1,
+                                             "West Palearctic"  = 1,
+                                             "Europe"           = 2,
+                                             "Central Europe"   = 2,
+                                             "Eurasian"         = 3,
+                                             "Holarctic"        = 3,
+                                             "Palearctic"       = 3,
+                                             "Eurosiberian"     = 3,
+                                             "North Palearctic" = 4,
+                                             "Transpalearctic"  = 4,
+                                             "Circumboreal"     = 5,
                                              .default = NA_real_
-    ), to = c(0, 1)),
-    
-    # Fixed typo Major 2: Assuming Wing.morph is the correct column name
-    Wings = scales::rescale(dplyr::recode(trimws(Wing.morph),
-                                          "A" = 1, "A/B" = 1, "B" = 1, "B/M" = 2, "M" = 3,
-                                          .default = NA_real_
-    ), to = c(0, 1)),
-    
-    Bioindication = scales::rescale(dplyr::recode(trimws(Bioindication.group),
-                                                  "E" = 1, "A" = 2, "R" = 3,
-                                                  .default = NA_real_
-    ), to = c(0, 1)),
-    
-    Moisture = scales::rescale(dplyr::recode(trimws(Moisture.tolerance),
-                                             "X" = 1, "S" = 2, "I" = 3, "V" = 4, "H" = 5,
-                                             .default = NA_real_
-    ), to = c(0, 1)),
-    
-    Distribution = scales::rescale(as.numeric(dplyr::recode(as.character(trimws(Areal.distribution)),
-                                                            "South Palearctic" = 1, "West Palearctic"  = 1,
-                                                            "Europe"           = 2, "Central Europe"   = 2,
-                                                            "Eurasian"         = 3, "Holarctic"        = 3,
-                                                            "Palearctic"       = 3, "Eurosiberian"     = 3,
-                                                            "North Palearctic" = 4, "Transpalearctic"  = 4,
-                                                            "Circumboreal"     = 5,
-                                                            .default = NA_real_
-    )), to = c(0, 1)),
+    )) - 1) / 4,
     
     Body_size = as.numeric(Body.size)
   )
@@ -149,23 +168,21 @@ cwm_results <- data_long1 %>%
     .groups = "drop"
   )
 
-# Center and scale Altitude
-env_data <- data_long1 %>%
-  group_by(Year, Locality) %>%
+site_env <- data_long1 %>%
+  group_by(Locality) %>%
   summarise(
-    # Major 4: Replaced risky first() with safer unique()[1]
-    HR          = unique(Hydric)[1],
-    Altitude    = mean(Elevation, na.rm = TRUE),
-    Exposition2 = unique(Exposition2)[1],
-    .groups     = "drop"
+    Altitude    = mean(Altitude, na.rm = TRUE),
+    Exposition2 = first(na.omit(Exposition2)), 
+    HR          = first(na.omit(HR)),
+    
+    .groups = "drop"
   ) %>%
   mutate(
     Altitude_scaled  = as.numeric(scale(Altitude, center = TRUE, scale = TRUE)),
     Altitude_scaled2 = Altitude_scaled^2
   )
-
 cwm_clean <- cwm_results %>%
-  left_join(env_data, by = c("Year", "Locality"))
+  left_join(site_env, by = "Locality")
 
 # Fit Linear Model (LM): Because each locality represented a unique altitudinal step without replication, we used ordinary least squares with heteroscedasticity-consistent (HC3) standard errors rather than mixed-effects or bootstrap model comparison approaches.
 # Because each locality represented a unique altitudinal step without replication, we used ordinary least squares with heteroscedasticity-consistent (HC3) standard errors rather than mixed-effects or bootstrap model comparison approaches.

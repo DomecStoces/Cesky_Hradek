@@ -51,7 +51,8 @@ coords_utm <- st_transform(coords_sf, crs = 32633)  # UTM 33N
 coords_clean <- coords_utm %>%
   mutate(
     X = st_coordinates(.)[, 1],
-    Y = st_coordinates(.)[, 2]
+    Y = st_coordinates(.)[, 2],
+    Locality = as.character(Locality)
   ) %>%
   st_drop_geometry() %>%
   dplyr::select(Locality, X, Y)
@@ -65,9 +66,7 @@ df <- cwm_clean %>%
   transmute(
     Year      = factor(Year),
     Locality  = factor(Locality),
-    
-    # Major 7: Simplified GAM preparation step
-    Exposition2 = scale(as.numeric(sub(",", ".", Exposition2))),
+    Exposition2 = as.numeric(scale(as.numeric(Exposition2))),
     
     Altitude_scaled, 
     Altitude_scaled2,
@@ -78,7 +77,7 @@ df <- cwm_clean %>%
     Moisture_cwm, Wings_cwm, Distribution_cwm, Body_size_cwm,
     Bioindication_cwm, Breeding_cwm, Dietary_cwm
   ) %>%
-  tidyr::drop_na() 
+  tidyr::drop_na(Wings_cwm, Altitude_scaled, Exposition2, Year, Locality)
 
 # Calculate adaptive basis dimension (k)
 k_xy <- max(6, min(10, nrow(dplyr::distinct(df, X_km, Y_km)) - 1))
@@ -95,15 +94,15 @@ df <- df |>
 offset(eta0)
 
 N <- nrow(df)
-df$Wings_cwm_scaled <- (df$Wings_cwm * (N - 1) + 0.5) / N
-df$Dietary_cwm_scaled <- (df$Dietary_cwm * (N - 1) + 0.5) / N
-df$Breeding_cwm_scaled <- (df$Breeding_cwm * (N - 1) + 0.5) / N
+df$Wings_cwm_scaled        <- (df$Wings_cwm * (N - 1) + 0.5) / N
+df$Dietary_cwm_scaled      <- (df$Dietary_cwm * (N - 1) + 0.5) / N
+df$Breeding_cwm_scaled     <- (df$Breeding_cwm * (N - 1) + 0.5) / N
 df$Distribution_cwm_scaled <- (df$Distribution_cwm * (N - 1) + 0.5) / N
 
 mod_gam1 <- gam(
-  Moisture_cwm ~ 
+  Wings_cwm_scaled ~ 
     s(Locality, bs = "re") +
-    s(Altitude_scaled, bs = "cr", k = 3) + Exposition2 +
+    s(Altitude_scaled, bs = "cr", k = 5) + Exposition2 +
     s(Year, bs = "re"),
   data   = df,
   family = betar(link = "cloglog"),
@@ -134,7 +133,7 @@ library(gstat)
 library(sp)
 
 # Residuals averaged per site to resolve the overlapping temporal data
-res_dharma <- simulateResiduals(fittedModel = mod_gam3)
+res_dharma <- simulateResiduals(fittedModel = mod_gam1)
 df$res_scaled <- res_dharma$scaledResiduals
 df_site_res <- df %>%
   group_by(Locality, X_km, Y_km) %>%
@@ -157,27 +156,30 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 
-# Terms to exclude
-excl <- c("s(Locality)", "s(X_km,Y_km)", "s(Year)")
-
-# 1) Grid for the line/ribbon
+excl <- c("s(Locality)", "s(Year)")
 tv <- typical_values(mod_gam1)
+
 alt_seq <- seq(min(df$Altitude_scaled, na.rm = TRUE),
                max(df$Altitude_scaled, na.rm = TRUE), length.out = 100)
 
 tv2 <- dplyr::select(tv, -any_of(c("Altitude_scaled","Altitude_scaled2")))
+
 new_data <- tidyr::crossing(tv2, tibble(Altitude_scaled = alt_seq)) %>%
   mutate(Altitude_scaled2 = Altitude_scaled^2)
-
-# 2) Fitted line/ribbon on response scale
+new_data <- tidyr::crossing(tv2, tibble(Altitude_scaled = alt_seq)) %>%
+  mutate(Altitude_scaled2 = Altitude_scaled^2)
+inv_link <- family(mod_gam1)$linkinv
 fv <- fitted_values(mod_gam1, data = new_data, exclude = excl,
-                    scale = "response", se = TRUE) %>%
-  dplyr::rename(fitted = any_of(c("fitted",".fitted","fit")),
-                se     = any_of(c("se",".se"))) %>%
-  mutate(lower = fitted - 1.96 * se,
-         upper = fitted + 1.96 * se)
-
-# 3) Partial points aligned with exclusions
+                    scale = "link", se = TRUE) %>%
+  dplyr::rename(fitted_link = any_of(c("fitted",".fitted","fit")),
+                se_link     = any_of(c("se",".se"))) %>%
+  mutate(
+    lower_link = fitted_link - (1.96 * se_link),
+    upper_link = fitted_link + (1.96 * se_link),
+    fitted = inv_link(fitted_link),
+    lower  = inv_link(lower_link),
+    upper  = inv_link(upper_link)
+  )
 fv_obs <- fitted_values(mod_gam1, data = df, exclude = excl,
                         scale = "response", se = FALSE) %>%
   dplyr::rename(fitted = any_of(c("fitted",".fitted","fit")))
@@ -185,18 +187,33 @@ fv_obs <- fitted_values(mod_gam1, data = df, exclude = excl,
 df$partial_excl <- residuals(mod_gam1, type = "response") + fv_obs$fitted
 
 p <- ggplot() +
+  # 1. The confidence ribbon
   geom_ribbon(data = fv,
               aes(x = Altitude_scaled, ymin = lower, ymax = upper),
               fill = "grey70", alpha = 0.35) +
+  
+  # 2. The fitted line (the "estimated curve")
   geom_line(data = fv,
             aes(x = Altitude_scaled, y = fitted), linewidth = 1.1) +
+  
+  # 3. The points (using your dispersal column)
   geom_jitter(data = df,
-              aes(x = Altitude_scaled, y = partial_excl),
+              aes(x = Altitude_scaled, y = Wings_cwm_scaled),
               width = 0.03, height = 0, size = 1.8, alpha = 0.6) +
-  labs(x = "Altitude (scaled)", y = "Moisture preferences CWM") +
+  
+  # Labels
+  labs(x = "Elevational gradient (scaled)", y = "Dispersal ability CWM") +
+  
+  # X-Axis: Matches the Rao's Q plot limits exactly
   scale_x_continuous(breaks = seq(-2, 2, 1), minor_breaks = NULL) +
-  scale_y_continuous(breaks = scales::pretty_breaks(5),
-                     expand = expansion(mult = c(0, 0.02))) +
+  # Y-Axis: FORCED TO 0 - 1
+  scale_y_continuous(
+    limits = c(0, 1),             
+    breaks = seq(0, 1, 0.2),         
+    expand = expansion(mult = c(0, 0.02)) 
+  ) +
+  
+  # Theme (kept identical to your Rao's Q setup)
   theme(
     panel.background = element_blank(),
     plot.background  = element_blank(),
