@@ -33,33 +33,24 @@ df$Exposition2<-as.numeric(scale(df$Exposition2))
 mod_gam1 <- gam(
   Q ~ 
     s(Locality, bs = "re") + 
-    s(Altitude_scaled, bs = "cr", k = 3) + 
+    s(Altitude_scaled, bs = "cr", k = 10) + 
     Exposition2 + 
     s(Year, bs = "re"),
   data   = df,
-  family = tw(),
+  family = Gamma(link="log"),
   method = "REML"
 )
 summary(mod_gam1)
+par(mfrow = c(2, 2))
+gam.check(mod_gam1)
+concurvity(mod_gam1, full = TRUE)
+gratia::draw(mod_gam1)
+plot(mod_gam1, select = 2)
 
-# Euclidean-corrected Rao's Q values using the ade4 package
-library(ade4)
-sp_mat_ade4 <- t(sp_mat)
-trait_distance_eucl <- lingoes(trait_distance)
-rao_ade4 <- divc(as.data.frame(sp_mat_ade4), trait_distance_eucl)
-head(rao_ade4)
-
-df$Q_ade4 <- rao_ade4$diversity
-n <- nrow(df)
-df$Q_ade4_beta <- (df$Q_ade4 * (n - 1) + 0.5) / n
-mod_gam_ade4 <- gam(
-  Q_ade4_beta ~ 
-    s(Locality, bs = "re") + 
-    s(Altitude_scaled, bs = "cr", k = 3) + 
-    Exposition2 + 
-    s(Year, bs = "re"),
-  data   = df,
-  family = betar(link = "cloglog"),
-  method = "REML"
-)
-summary(mod_gam_ade4)
+plot(mod_gam1, 
+     select = 2,           
+     shade = TRUE,         
+     residuals = TRUE,     
+     pch = 1, cex = 0.5, 
+     col = "darkgreen", 
+     main = "Effect of Altitude on Rao's Q")

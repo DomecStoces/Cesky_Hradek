@@ -38,6 +38,7 @@ head(ses_results)
 
 final_df <- merge(ses_results, env_data, by = "row.names")
 colnames(final_df)[1] <- "ID"
+dropped_sites <- final_df[is.na(final_df$pd.obs.z), ]
 
 final_df$Locality <- as.factor(final_df$Locality)
 final_df$Year <- as.factor(final_df$Year)
