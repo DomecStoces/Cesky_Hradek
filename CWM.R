@@ -1,4 +1,4 @@
-data_long1 <- read_excel("data_long1.xlsx", sheet = "Sheet1")
+cwm_clean <- read_excel("cwm_clean.xlsx", sheet = "Sheet1")
 
 # Fourth corner analysis
 library(readxl)
@@ -156,7 +156,7 @@ data_long1 <- data_long1 %>%
 
 # Calculate Community Weighted Means (CWM)
 cwm_results <- data_long1 %>%
-  group_by(Year, Locality) %>%
+  group_by(Year, Month, Locality) %>%
   summarise(
     # Major 3: Vectorized calculation using across()
     across(

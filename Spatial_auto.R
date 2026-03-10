@@ -66,22 +66,23 @@ df <- cwm_clean %>%
   transmute(
     Year      = factor(Year),
     Locality  = factor(Locality),
+    Month     = factor(Month),
     Exposition2 = as.numeric(scale(as.numeric(Exposition2))),
     
-    Altitude_scaled, 
-    Altitude_scaled2,
+    Altitude_scaled,
     
     X_km = (X - mean(X, na.rm = TRUE)) / 1000,
     Y_km = (Y - mean(Y, na.rm = TRUE)) / 1000,
     
     Moisture_cwm, Wings_cwm, Distribution_cwm, Body_size_cwm,
-    Bioindication_cwm, Breeding_cwm, Dietary_cwm
+    Bioindication_cwm, Dietary_cwm
   ) %>%
-  tidyr::drop_na(Wings_cwm, Altitude_scaled, Exposition2, Year, Locality)
+  tidyr::drop_na(Wings_cwm, Altitude_scaled, Exposition2, Year, Locality, Month)
 
 # Calculate adaptive basis dimension (k)
 k_xy <- max(6, min(10, nrow(dplyr::distinct(df, X_km, Y_km)) - 1))
 
+write_xlsx(df, "df.xlsx")
 # GAM: simpler polynomial representation is preferred for interpretability and model parsimony than smooth term of Altitude.
 # Deviations from the mid-domain null
 eps <- 1e-6
@@ -100,7 +101,7 @@ df$Breeding_cwm_scaled     <- (df$Breeding_cwm * (N - 1) + 0.5) / N
 df$Distribution_cwm_scaled <- (df$Distribution_cwm * (N - 1) + 0.5) / N
 
 mod_gam1 <- gam(
-  Wings_cwm_scaled ~ 
+  Dietary_cwm_scaled ~ 
     s(Locality, bs = "re") +
     s(Altitude_scaled, bs = "cr", k = 5) + Exposition2 +
     s(Year, bs = "re"),
@@ -108,8 +109,6 @@ mod_gam1 <- gam(
   family = betar(link = "cloglog"),
   method = "REML"
 )
-
-
 
 s(X_km, Y_km, bs = "tp", k = k_xy)
 s(Altitude_scaled, bs = "cr", k = 3)
