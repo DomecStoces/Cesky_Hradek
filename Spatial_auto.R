@@ -94,15 +94,19 @@ df <- df |>
   )
 offset(eta0)
 
+
+df <- read_excel("df.xlsx", sheet = "Sheet1")
 N <- nrow(df)
 df$Wings_cwm_scaled        <- (df$Wings_cwm * (N - 1) + 0.5) / N
 df$Dietary_cwm_scaled      <- (df$Dietary_cwm * (N - 1) + 0.5) / N
 df$Breeding_cwm_scaled     <- (df$Breeding_cwm * (N - 1) + 0.5) / N
 df$Distribution_cwm_scaled <- (df$Distribution_cwm * (N - 1) + 0.5) / N
 
+df$Year <- factor(df$Year)
+df$Locality <- factor(df$Locality)
+
 mod_gam1 <- gam(
-  Dietary_cwm_scaled ~ 
-    s(Locality, bs = "re") +
+  Wings_cwm_scaled ~ s(Locality, bs = "re") +
     s(Altitude_scaled, bs = "cr", k = 5) + Exposition2 +
     s(Year, bs = "re"),
   data   = df,
@@ -127,27 +131,26 @@ library(mgcViz)
 sim <- simulateResiduals(fittedModel = mod_gam1, n = 2000, seed = 123)
 plot(sim, qgam = TRUE) 
 
-# correlogram (binned Moran’s I)
+# correlogram (autocorrelation using Moran’s I based on site-averaged Pearson residuals)
 library(gstat)
 library(sp)
+library(spdep)
 
-# Residuals averaged per site to resolve the overlapping temporal data
-res_dharma <- simulateResiduals(fittedModel = mod_gam1)
-df$res_scaled <- res_dharma$scaledResiduals
+df$resid <- residuals(mod_gam1, type = "pearson")
 df_site_res <- df %>%
   group_by(Locality, X_km, Y_km) %>%
-  summarise(mean_res = mean(res_scaled, na.rm = TRUE), .groups = 'drop')
-
-# Convert the summarized site data to a spatial object
-coordinates(df_site_res) <- ~ X_km + Y_km
-
-# Empirical variogram using the averaged DHARMa residuals
-vg <- variogram(mean_res ~ 1, data = df_site_res, cutoff = 40, width = 2, cressie = TRUE)
-plot(vg, main = "Residual Variogram")
-
-tiff('Variogram_Wings.tiff', units = "in", width = 8, height = 6, res = 600)
-plot(vg, main = "Residual Variogram")
-dev.off()
+  summarise(mean_res = mean(resid, na.rm = TRUE), .groups = "drop")
+coords <- as.matrix(df_site_res[,c("X_km","Y_km")])
+nb <- dnearneigh(coords, 0, 10)   
+lw <- nb2listw(nb, style = "W")
+moran.test(df_site_res$mean_res, lw)
+coordinates(df_site_res) <- ~X_km + Y_km
+vg <- variogram(mean_res ~ 1,
+                data = df_site_res,
+                cutoff = 40,
+                width = 2,
+                cressie = TRUE)
+plot(vg, main = "Empirical variogram of GAM residuals")
 
 # Plotting the effect of Altitude_scaled on CWM traits from mod_gam1
 library(gratia)
@@ -211,8 +214,6 @@ p <- ggplot() +
     breaks = seq(0, 1, 0.2),         
     expand = expansion(mult = c(0, 0.02)) 
   ) +
-  
-  # Theme (kept identical to your Rao's Q setup)
   theme(
     panel.background = element_blank(),
     plot.background  = element_blank(),

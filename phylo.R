@@ -1,59 +1,112 @@
-library(ape)
-library(picante)
+library(DHARMa)
+library(qgam)
+library(mgcViz)
+library(dplyr)
+library(gstat)
+library(sp)
+library(spdep)
+library(mgcv)
 library(readxl)
 
-taxa_df <- read_excel("Phylogenetic_analysis.xlsx", sheet = "Phylogeny")
-taxa_df <- as.data.frame(taxa_df)
-taxa_df$Family_name <- as.factor(taxa_df$Family_name)
-taxa_df$Subfamily <- as.factor(taxa_df$Subfamily)
-taxa_df$Tribus <- as.factor(taxa_df$Tribus)
-taxa_df$Species <- as.factor(taxa_df$Species)
-taxa_df$Root <- as.factor("Coleoptera")
-taxa_tree <- as.phylo(~Root/Family_name/Subfamily/Tribus/Species, data = taxa_df)
-
-# Build the tree structure using the taxonomic hierarchy
-taxa_tree <- compute.brlen(taxa_tree)
-plot(taxa_tree, cex = 0.5, no.margin = TRUE)
-
-# Format the species abundance matrix
-sp_data <- as.data.frame(read_excel("Phylogenetic_analysis.xlsx", sheet = "sp"))
-rownames(sp_data) <- sp_data$ID
-sp_data$ID <- NULL
-
-# Format the elevation data
-env_data <- as.data.frame(read_excel("Phylogenetic_analysis.xlsx", sheet = "Sites_years"))
-
-# Match the tree and the community data
-combined_data <- match.phylo.comm(taxa_tree, sp_data)
-
-# 2. Calculate SES.pd
-# 'taxa.labels' shuffles species names across the tree, preserving tree topology
-# 999 runs is the standard for publication-quality p-values
-set.seed(123)
-ses_results <- ses.pd(samp = combined_data$comm, 
-                      tree = combined_data$phy, 
-                      null.model = "taxa.labels", 
-                      runs = 999,include.root = FALSE)
-head(ses_results)
-
-final_df <- merge(ses_results, env_data, by = "row.names")
-colnames(final_df)[1] <- "ID"
-dropped_sites <- final_df[is.na(final_df$pd.obs.z), ]
-
-final_df$Locality <- as.factor(final_df$Locality)
-final_df$Year <- as.factor(final_df$Year)
-final_df$Altitude_scaled <- as.numeric(scale(final_df$Elevation, center = TRUE, scale = TRUE))
-final_df$Exposition2<-as.numeric(scale(final_df$Exposition2))
-
-library(mgcv)
-mod_gam1 <- gam(
-  pd.obs.z ~ 
-    s(Locality, bs = "re") + 
-    s(Altitude_scaled, bs = "cr", k = 3) + 
-    Exposition2 + 
+### Analysis of Phylogeny Sespd and meanPD ###
+PD <- read_excel("PD.xlsx", sheet = "List1")
+PD$Locality <- as.factor(PD$Locality)
+PD$Year     <- as.factor(PD$Year)
+mod_gam_pd <- gam(
+  meanPD ~ s(Altitude_scaled, bs = "cr", k = 5) + s(Locality, bs = "re") +
+    Exposition2 +
     s(Year, bs = "re"),
-  data   = final_df,
-  family = gaussian(),
+  data = PD, 
+  family = gaussian(), 
   method = "REML"
 )
-summary(mod_gam1)
+
+summary(mod_gam_spd)
+par(mfrow = c(2, 2))
+gam.check(mod_gam_pd)
+concurvity(mod_gam_pd, full = TRUE)
+gratia::draw(mod_gam_pd)
+plot(mod_gam_pd, select = 2)
+
+# correlogram (autocorrelation using Moran’s I based on site-averaged Pearson residuals)
+PD$resid <- residuals(mod_gam_pd, type = "pearson")
+df_site_res <- PD %>%
+  group_by(Locality, X_km, Y_km) %>%
+  summarise(mean_res = mean(resid, na.rm = TRUE), .groups = "drop")
+coords <- as.matrix(df_site_res[,c("X_km","Y_km")])
+nb <- dnearneigh(coords, 0, 10)   
+lw <- nb2listw(nb, style = "W")
+moran.test(df_site_res$mean_res, lw)
+coordinates(df_site_res) <- ~X_km + Y_km
+vg <- variogram(mean_res ~ 1,
+                data = df_site_res,
+                cutoff = 40,
+                width = 2,
+                cressie = TRUE)
+plot(vg, main = "Empirical variogram of GAM residuals")
+
+# Because multiple observations were collected within the same sites (hierarchical structure), locality was included as a random effect to account for spatial clustering and avoid pseudoreplication.
+PD %>%
+  group_by(Locality) %>%
+  summarise(alt = mean(Altitude_scaled))
+
+### Graphical vizualization of SES.pd ###
+mod_gam_sespd <- gam(
+  SESpd ~ s(Altitude_scaled, bs = "cr", k = 5) + s(Locality, bs = "re") +
+    Exposition2 +
+    s(Year, bs = "re"),
+  data = df, 
+  family = gaussian(), 
+  method = "REML"
+)
+
+
+library(ggplot2)
+newdat <- data.frame(
+  Altitude_scaled = seq(min(df$Altitude_scaled), max(df$Altitude_scaled), length = 200),
+  Exposition2 = mean(df$Exposition2),
+  Locality = NA,
+  Year = NA
+)
+pred <- predict(mod_gam_sespd, newdata = newdat, se.fit = TRUE,
+                exclude = c("s(Locality)", "s(Year)"))
+newdat$fit <- pred$fit
+newdat$se  <- pred$se.fit
+newdat$upper <- newdat$fit + 1.96 * newdat$se
+newdat$lower <- newdat$fit - 1.96 * newdat$se
+
+phylo<-ggplot(df, aes(x = Altitude_scaled, y = SESpd)) +
+  
+  # The raw points - now matching the CWM plot using geom_jitter
+  geom_jitter(width = 0.03, height = 0, size = 1.8, alpha = 0.6, color = "black") +  
+  
+  # The GAM trendline
+  geom_smooth(method = "gam", color = "black", fill = "grey70", alpha = 0.3) +
+  
+  # The 0 baseline 
+  geom_hline(yintercept = 0, linetype = "solid", color = "black", linewidth = 0.5, alpha = 0.6) + 
+  
+  # The +/- 1.96 significance thresholds
+  geom_hline(yintercept = 1.96, linetype = "dashed", color = "black", alpha = 0.7) +
+  geom_hline(yintercept = -1.96, linetype = "dashed", color = "black", alpha = 0.7) +
+  
+  # X-Axis: Matches the CWM plot limits exactly
+  scale_x_continuous(breaks = seq(-2, 2, 1), minor_breaks = NULL) +
+  
+  theme_minimal() +
+  labs(
+    x = "Elevational gradient (Scaled)",
+    y = "SESpd") +
+  theme(
+    panel.background = element_blank(),
+    plot.background  = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.line        = element_line(colour = "black", linewidth = 0.6),
+    axis.ticks       = element_line(colour = "black", linewidth = 0.5),
+    axis.ticks.length= unit(4, "pt"),
+    axis.title       = element_text(size = 15),
+    axis.text        = element_text(colour = "black", size = 11),
+    plot.margin      = margin(6, 8, 6, 6)
+  )
+phylo

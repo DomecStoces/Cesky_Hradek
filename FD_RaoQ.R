@@ -40,41 +40,37 @@ mod_gam_rao <- gam(
   family = tw(link="log"), select = TRUE,
   method = "REML"
 )
-summary(mod_gam1)
+summary(mod_gam_rao)
 par(mfrow = c(2, 2))
-gam.check(mod_gam1)
-concurvity(mod_gam1, full = TRUE)
-gratia::draw(mod_gam1)
-plot(mod_gam1, select = 2)
+gam.check(mod_gam_rao)
+concurvity(mod_gam_rao, full = TRUE)
+gratia::draw(mod_gam_rao)
+plot(mod_gam_rao, select = 2)
 
-plot(mod_gam1, select = 2, shade = TRUE, residuals = TRUE, 
-     pch = 1, cex = 0.5, col = "black",
-     ylim = c(-1, 1),
-     main = "Effect of Altitude on Rao's Q (Zoomed)")
+# correlogram (autocorrelation using Moran’s I based on site-averaged Pearson residuals)
+library(DHARMa)
+library(qgam)
+library(mgcViz)
+library(dplyr)
+library(gstat)
+library(sp)
+library(spdep)
 
-res_dharma_rao <- simulateResiduals(fittedModel = mod_gam_rao, n = 2000, seed = 123)
-
-# Optional: Plot the standard DHARMa diagnostic plots to check for overall fit/dispersion
-plot(res_dharma_rao) 
-
-# --- 4. AVERAGE RESIDUALS PER SITE ---
-df$res_scaled <- res_dharma_rao$scaledResiduals
-
+df$resid <- residuals(mod_gam_rao, type = "pearson")
 df_site_res <- df %>%
   group_by(Locality, X_km, Y_km) %>%
-  summarise(mean_res = mean(res_scaled, na.rm = TRUE), .groups = 'drop')
-
-# --- 5. SPATIAL CONVERSION ---
-# Convert to spatial object using the coordinates
-coordinates(df_site_res) <- ~ X_km + Y_km
-
-# --- 6. CALCULATE & PLOT VARIOGRAM ---
-vg_rao <- variogram(mean_res ~ 1, data = df_site_res, cutoff = 40, width = 2, cressie = TRUE)
-
-# View it in R first
-plot(vg_rao, main = "Residual Variogram")
-
-
+  summarise(mean_res = mean(resid, na.rm = TRUE), .groups = "drop")
+coords <- as.matrix(df_site_res[,c("X_km","Y_km")])
+nb <- dnearneigh(coords, 0, 10)   
+lw <- nb2listw(nb, style = "W")
+moran.test(df_site_res$mean_res, lw)
+coordinates(df_site_res) <- ~X_km + Y_km
+vg <- variogram(mean_res ~ 1,
+                data = df_site_res,
+                cutoff = 40,
+                width = 2,
+                cressie = TRUE)
+plot(vg, main = "Empirical variogram of GAM residuals")
 
 # Vizualization of FD Rao
 library(gratia)
@@ -117,7 +113,7 @@ p <- ggplot() +
   geom_jitter(data = df,
               aes(x = Altitude_scaled, y = Q),
               width = 0.03, height = 0, size = 1.8, alpha = 0.6) +
-  labs(x = "Elevational gradient (scaled)", y = "Functional Diversity (Rao's Q)") + # Updated label
+  labs(x = "Elevational gradient (scaled)", y = "Functional Diversity (Rao's Q)") +
   scale_x_continuous(breaks = seq(-2, 2, 1), minor_breaks = NULL) +
   scale_y_continuous(breaks = scales::pretty_breaks(5),
                      expand = expansion(mult = c(0, 0.02))) +
