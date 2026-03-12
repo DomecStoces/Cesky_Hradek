@@ -7,6 +7,7 @@ library(sp)
 library(spdep)
 library(mgcv)
 library(readxl)
+library(picante)
 
 ### Analysis of Phylogeny Sespd and meanPD ###
 PD <- read_excel("PD.xlsx", sheet = "List1")
