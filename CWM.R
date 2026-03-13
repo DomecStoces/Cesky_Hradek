@@ -1,4 +1,4 @@
-cwm_clean <- read_excel("cwm_clean.xlsx", sheet = "Sheet1")
+cwm_clean <- read_excel("df.xlsx", sheet = "Sheet1")
 
 # Fourth corner analysis
 library(readxl)
@@ -240,18 +240,18 @@ coef_test(mod1, vcov = V)
 
 # Wings: The community-weighted mean of wing morphology (Wings_cwm) showed a strong nonlinear relationship with altitude (Type III ANOVA: F₂,₇₄ = 22.7, p < 0.001). Both the linear and quadratic terms of altitude remained significant when using heteroskedasticity-robust standard errors (HC3, p < 0.01) and bootstrapped confidence intervals (95% CI: linear −0.0110 to −0.0044; quadratic 3.9×10⁻⁶ to 9.1×10⁻⁶). Although tests indicated non-constant variance (Breusch–Pagan p = 0.022), the effect size and pattern were consistent across robust estimation procedures, supporting a strong altitudinal gradient in wing reduction.
 
-cwm_mat3 <- cwm_clean[, c("Wings_cwm", "Distribution_cwm", "Moisture_cwm")]
+cwm_mat3 <- cwm_clean[, c("Wings_cwm", "Body_size_cwm", "Dietary_cwm")]
 # Correlation among CWMs 
 library(corrplot)
 cor_mat <- cor(
-  cwm_results[, c("Wings_cwm", "Distribution_cwm", "Moisture_cwm")],
+  cwm_clean[, c("Wings_cwm", "Body_size_cwm", "Dietary_cwm")],
   method = "spearman",
   use = "pairwise.complete.obs"
 )
 colnames(cor_mat) <- rownames(cor_mat) <- c(
   "Dispersal ability",
-  "Biogeographical affinity",
-  "Moisture preference"
+  "Body size",
+  "Trophic strategy"
 )
 corrplot(
   cor_mat,
@@ -269,8 +269,8 @@ library(factoextra)
 cwm_mat3 <- cwm_clean %>%
   select(
     `Dispersal ability`   = Wings_cwm,
-    `Biogeographical affinity` = Distribution_cwm,
-    `Moisture preference`            = Moisture_cwm
+    `Body size` = Body_size_cwm,
+    `Trophic strategy`            = Dietary_cwm
   ) %>%
   na.omit()
 res.pca3 <- PCA(cwm_mat3, scale.unit = TRUE, graph = FALSE)
@@ -291,9 +291,9 @@ anova(rda_cwm, by = "axis", permutations = 999)
 
 # Mantel test of two CWMs
 # Distances
-d_dist  <- dist(cwm_clean$Distribution_cwm)
-d_wings <- dist(cwm_clean$Wings_cwm)
-d_moist <- dist(cwm_clean$Moisture_cwm)
+d_dist  <- dist(cwm_clean$Wings_cwm)
+d_wings <- dist(cwm_clean$Body_size_cwm)
+d_moist <- dist(cwm_clean$Dietary_cwm)
 
 mantel(d_dist, d_wings, method = "spearman", permutations = 999)
 mantel(d_dist, d_moist, method = "spearman", permutations = 999)
