@@ -1,102 +1,110 @@
+# 1. Packages
 library(readxl)
-library(writexl)
-library(vegan)
 library(dplyr)
 library(tidyr)
-library(ggplot2)
+library(vegan)
 
-# 1.
+# 2. Load data
 data_long <- read_excel("data_long.xlsx", sheet = "Sheet1")
-# 2. Aggregate and reshape from Long to Wide format
-df_agg <- data_long %>%
-  # IMPORTANT: I removed Year and Month here! 
-  # This pools all 4 years of data into one single community per Locality/Elevation.
-  group_by(Locality, Elevation, Exposition2, Species) %>%
-  summarise(Abundance = sum(Abundance), .groups = "drop") %>%
-  pivot_wider(names_from = Species, values_from = Abundance, values_fill = list(Abundance = 0))
 
-# 3. Prepare Metadata & Scale Continuous Variables
+# 3. Aggregate data by Locality, Elevation, Exposition, Year, Month, and Species
+#    Each row = one Locality x Year x Month community
+df_agg <- data_long %>%
+  group_by(Locality, Elevation, Exposition2, Year, Month, Species) %>%
+  summarise(Abundance = sum(Abundance), .groups = "drop") %>%
+  pivot_wider(
+    names_from = Species, 
+    values_from = Abundance, 
+    values_fill = list(Abundance = 0)
+  )
+
+# 4. Prepare metadata
 df_agg <- df_agg %>%
   mutate(
     Locality = as.factor(Locality),
-    # Scale Elevation
-    across(
-      .cols = c(Elevation), 
-      .fns = ~ as.numeric(scale(.)),
-      .names = "{.col}_scaled"
-    )
+    Exposition2 = as.factor(Exposition2),
+    Year = as.factor(Year),
+    Month = as.factor(Month),
+    Elevation_scaled = as.numeric(scale(Elevation))
   )
-# 4. Prepare Community Matrix
-# Drop metadata columns to leave only the species columns
-comm_agg <- df_agg %>% 
-  select(-Locality, -Elevation, -Exposition2, -Elevation_scaled)
-comm_agg <- as.matrix(comm_agg)
-rownames(comm_agg) <- df_agg$Locality
 
-# Convert to presence/absence (binary)
+# 5. Prepare community matrix (species only)
+comm_agg <- df_agg %>% 
+  select(-Locality, -Exposition2, -Year, -Month, -Elevation, -Elevation_scaled) %>%
+  as.matrix()
+
+# 6. Create unique row names for repeated measures
+rownames(comm_agg) <- paste(df_agg$Locality, df_agg$Year, df_agg$Month, sep = "_")
+
+# 7. Convert to presence/absence (binary) for beta-diversity
 comm_pa_agg <- ifelse(comm_agg > 0, 1, 0)
 
-# 5. Calculate independent beta-diversity components using designdist
+# =========================================
+# 8. Calculate independent beta-diversity components
+# Jaccard (total), Simpson (turnover), Nestedness (richness difference)
+# =========================================
 dist_jaccard <- designdist(comm_pa_agg, method = "1 - (J / (A + B - J))", terms = "binary")
 dist_simpson <- designdist(comm_pa_agg, method = "1 - (J / pmin(A, B))", terms = "binary")
 dist_richness <- designdist(comm_pa_agg, method = "1 - (pmin(A, B) / pmax(A, B))", terms = "binary")
 
-# Square-root transform them for PERMDISP/PERMANOVA
+# Square-root transform distances (recommended for PERMDISP / PERMANOVA)
 dist_jaccard_sqrt  <- sqrt(dist_jaccard)
 dist_simpson_sqrt  <- sqrt(dist_simpson)
 dist_richness_sqrt <- sqrt(dist_richness)
 
-# 6. PERMDISP: Testing multivariate dispersion (variance)
-# Using Exposition as the categorical grouping factor
-disp_jaccard <- betadisper(dist_jaccard_sqrt, df_agg$Exposition)
-disp_simpson <- betadisper(dist_simpson_sqrt, df_agg$Exposition)
+# =========================================
+# 9. PERMDISP: test homogeneity of multivariate dispersions
+# =========================================
+disp_jaccard <- betadisper(dist_jaccard_sqrt, df_agg$Exposition2)
+disp_simpson <- betadisper(dist_simpson_sqrt, df_agg$Exposition2)
 
-print("--- PERMDISP Results ---")
+cat("\n--- PERMDISP Results (Jaccard) ---\n")
 print(permutest(disp_jaccard, permutations = 999))
+
+cat("\n--- PERMDISP Results (Simpson) ---\n")
 print(permutest(disp_simpson, permutations = 999))
 
-# 7. PERMANOVA
+# =========================================
+# 10. PERMANOVA: test effects of Exposition, Elevation, Year, Month
+#          with Locality as a stratum (repeated measures)
+# =========================================
+
 # Total beta-diversity (Jaccard)
-perm_jaccard <- adonis2(dist_jaccard_sqrt ~ Exposition2 + Elevation_scaled, 
-                        data = df_agg, 
-                        permutations = 999,
-                        by = "margin")
-
-# Turnover (Simpson)
-perm_simpson <- adonis2(dist_simpson_sqrt ~ Exposition2 + Elevation_scaled, 
-                        data = df_agg, 
-                        permutations = 999,
-                        by = "margin")
-
-# Richness difference (Nestedness-resultant)
-perm_richness <- adonis2(dist_richness_sqrt ~ Exposition2 + Elevation_scaled, 
-                         data = df_agg, 
-                         permutations = 999,
-                         by = "margin")
-
-print("--- PERMANOVA of Elevational gradient and Exposition ---")
-print("Total Beta-Diversity (Jaccard):")
+cat("\n--- PERMANOVA: Total Beta-Diversity (Jaccard) ---\n")
+perm_jaccard <- adonis2(
+  dist_jaccard_sqrt ~ Exposition2 + Elevation_scaled + Year + Month,
+  data = df_agg,
+  permutations = 999,
+  by = "margin",
+  strata = df_agg$Locality
+)
 print(perm_jaccard)
 
-print("Turnover (Simpson):")
+# Turnover (Simpson)
+cat("\n--- PERMANOVA: Turnover (Simpson) ---\n")
+perm_simpson <- adonis2(
+  dist_simpson_sqrt ~ Exposition2 + Elevation_scaled + Year + Month,
+  data = df_agg,
+  permutations = 999,
+  by = "margin",
+  strata = df_agg$Locality
+)
 print(perm_simpson)
 
-print("Richness Differences:")
+# Richness difference (Nestedness)
+cat("\n--- PERMANOVA: Richness Difference (Nestedness) ---\n")
+perm_richness <- adonis2(
+  dist_richness_sqrt ~ Exposition2 + Elevation_scaled + Year + Month,
+  data = df_agg,
+  permutations = 999,
+  by = "margin",
+  strata = df_agg$Locality
+)
 print(perm_richness)
 
-cor.test(df_agg$Altitude, rowSums(comm_pa_agg))
-
-# 1. Add species richness (number of species) directly into aggregated dataframe
-df_agg$Richness <- rowSums(comm_pa_agg)
-# 2. Create the linear regression plot
-plot_richness <- ggplot(df_agg, aes(x = Altitude_scaled, y = Richness)) +
-  geom_point(size = 1.5, alpha = 0.8) +
-  geom_smooth(method = "lm", color = "black", fill = "grey60", alpha = 0.3) +
-  theme_bw(base_size = 15) +
-  theme(panel.grid.minor = element_blank(),
-        legend.position = "right") +
-  labs(title = "Spider",
-       x = "Elevational gradient (scaled)",
-       y = "Species richness")
-print(plot_richness)
-
+# =========================================
+# Notes:
+# 1. Using 'strata = Locality' fixes pseudoreplication for repeated monthly/annual samples.
+# 2. Year and Month in the formula control for temporal variation (partition variance from repeated measures).
+# 3. Significant PERMDISP results indicate differences in dispersion; interpret PERMANOVA with caution.
+# =========================================
