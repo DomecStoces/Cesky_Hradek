@@ -6,27 +6,30 @@ library(tidyr)
 library(ggplot2)
 
 # 1.
-df <- read_excel("data_long.xlsx", sheet = "Sheet1")
+data_long <- read_excel("data_long.xlsx", sheet = "Sheet1")
 # 2. Aggregate and reshape from Long to Wide format
-# Group by Locality and your environmental variables, then sum abundances
-df_agg <- df %>%
-  group_by(Locality, Elevation, Exposition) %>%
-  # Sum abundances in case there are multiple entries for the same species at a locality
+df_agg <- data_long %>%
+  # IMPORTANT: I removed Year and Month here! 
+  # This pools all 4 years of data into one single community per Locality/Elevation.
+  group_by(Locality, Elevation, Exposition2, Species) %>%
   summarise(Abundance = sum(Abundance), .groups = "drop") %>%
-  # Pivot to wide format: Species become columns, Abundance becomes values
   pivot_wider(names_from = Species, values_from = Abundance, values_fill = list(Abundance = 0))
 
 # 3. Prepare Metadata & Scale Continuous Variables
 df_agg <- df_agg %>%
   mutate(
-    Elevation_scaled = scale(Elevation),
-    Exposition = as.factor(Exposition),
-    Locality = as.factor(Locality)
+    Locality = as.factor(Locality),
+    # Scale Elevation
+    across(
+      .cols = c(Elevation), 
+      .fns = ~ as.numeric(scale(.)),
+      .names = "{.col}_scaled"
+    )
   )
-
 # 4. Prepare Community Matrix
 # Drop metadata columns to leave only the species columns
-comm_agg <- df_agg %>% select(-Locality, -Elevation, -Elevation_scaled, -Exposition)
+comm_agg <- df_agg %>% 
+  select(-Locality, -Elevation, -Exposition2, -Elevation_scaled)
 comm_agg <- as.matrix(comm_agg)
 rownames(comm_agg) <- df_agg$Locality
 
@@ -54,19 +57,19 @@ print(permutest(disp_simpson, permutations = 999))
 
 # 7. PERMANOVA
 # Total beta-diversity (Jaccard)
-perm_jaccard <- adonis2(dist_jaccard_sqrt ~ Exposition + Elevation_scaled, 
+perm_jaccard <- adonis2(dist_jaccard_sqrt ~ Exposition2 + Elevation_scaled, 
                         data = df_agg, 
                         permutations = 999,
                         by = "margin")
 
 # Turnover (Simpson)
-perm_simpson <- adonis2(dist_simpson_sqrt ~ Exposition + Elevation_scaled, 
+perm_simpson <- adonis2(dist_simpson_sqrt ~ Exposition2 + Elevation_scaled, 
                         data = df_agg, 
                         permutations = 999,
                         by = "margin")
 
 # Richness difference (Nestedness-resultant)
-perm_richness <- adonis2(dist_richness_sqrt ~ Exposition + Elevation_scaled, 
+perm_richness <- adonis2(dist_richness_sqrt ~ Exposition2 + Elevation_scaled, 
                          data = df_agg, 
                          permutations = 999,
                          by = "margin")
