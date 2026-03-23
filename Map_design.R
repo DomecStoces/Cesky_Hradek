@@ -165,8 +165,6 @@ p_central_labels <- ggplot() +
     size = 5.2,                
     fontface = "bold",
     color = "black",
-    segment.size = 0.25,
-    min.segment.length = 0,
     max.overlaps = Inf        
   ) +
   coord_sf(xlim = xlim, ylim = ylim, expand = FALSE) +

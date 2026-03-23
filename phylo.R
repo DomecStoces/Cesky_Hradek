@@ -22,7 +22,7 @@ mod_gam_pd <- gam(
   method = "REML"
 )
 
-summary(mod_gam_spd)
+summary(mod_gam_pd)
 par(mfrow = c(2, 2))
 gam.check(mod_gam_pd)
 concurvity(mod_gam_pd, full = TRUE)
@@ -30,6 +30,14 @@ gratia::draw(mod_gam_pd)
 plot(mod_gam_pd, select = 2)
 
 # correlogram (autocorrelation using Moran’s I based on site-averaged Pearson residuals)
+library(DHARMa)
+library(qgam)
+library(mgcViz)
+library(dplyr)
+library(gstat)
+library(sp)
+library(spdep)
+
 PD$resid <- residuals(mod_gam_pd, type = "pearson")
 df_site_res <- PD %>%
   group_by(Locality, X_km, Y_km) %>%

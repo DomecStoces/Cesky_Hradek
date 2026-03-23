@@ -1,4 +1,4 @@
-cwm_clean <- read_excel("cwm_clean.xlsx", sheet = "Sheet1")
+cwm_clean <- read_excel("df.xlsx", sheet = "Sheet1")
 
 # Fourth corner analysis
 library(readxl)
@@ -184,74 +184,18 @@ site_env <- data_long1 %>%
 cwm_clean <- cwm_results %>%
   left_join(site_env, by = "Locality")
 
-# Fit Linear Model (LM): Because each locality represented a unique altitudinal step without replication, we used ordinary least squares with heteroscedasticity-consistent (HC3) standard errors rather than mixed-effects or bootstrap model comparison approaches.
-# Because each locality represented a unique altitudinal step without replication, we used ordinary least squares with heteroscedasticity-consistent (HC3) standard errors rather than mixed-effects or bootstrap model comparison approaches.
-mod1 <- lm(Distribution_cwm ~ poly(Altitude, 2, raw = TRUE) + Exposition2,
-                  data = cwm_clean)
-res1 <- residuals(mod1)
-Anova(mod1,type = "III")
-coeftest(mod1, vcov = sandwich::vcovHC(mod1, type = "HC3"))
-# Parametric bootstrap implemented via resampling residuals
-confint(mod1, method = "boot", nsim = 1999)
-# Diagnosis for lm()= assumptions of linear modeling needs to be satisfied, no significant non-normality or variance heterogeneity
-par(mfrow=c(2,2)); plot(mod1)              # residual vs fitted, QQ
-car::ncvTest(mod1)                         # heteroskedasticity
-lmtest::bptest(mod1)                       # Breusch–Pagan = non-constant variance
-car::crPlots(mod1)                         # component + residual for shape
-
-# Spatial autocorrelation
-library(spdep)
-
-# A) Within each year (no duplicate coords inside a year)
-years <- levels(cwm_clean$Year)
-out <- lapply(years, function(y){
-  dat <- subset(cwm_clean, Year == y)
-  coords <- as.matrix(dat[, c("X","Y")])
-  nb  <- knn2nb(knearneigh(coords, k = 4))
-  lw  <- nb2listw(nb, style = "W")
-  moran.test(res1[ cwm_clean$Year == y ], lw)
-})
-names(out) <- years
-out
-# B) Aggregate to unique sites (one value per locality)
-agg <- cwm_clean |>
-  mutate(res1 = res1) |>
-  group_by(Locality) |>
-  summarise(X = mean(X), Y = mean(Y), res1 = mean(res1), .groups="drop")
-
-coords <- as.matrix(agg[, c("X","Y")])
-nb  <- knn2nb(knearneigh(coords, k = 4))
-lw  <- nb2listw(nb, style = "W")
-moran.test(agg$res1, lw)
-
-# cluster-robust SEs (by Locality) to safeguard against any residual within-site correlation
-library(clubSandwich)
-library(lmtest)
-V <- vcovCR(mod1, cluster = cwm_clean$Locality, type = "CR2")
-coef_test(mod1, vcov = V)
-
-# Interpretation
-# Distribution: The relationship between the community-weighted mean of species’ areal distribution and altitude was significant and unimodal (HC3-corrected linear term: t = −2.30, p = 0.025; quadratic term: t = 2.46, p = 0.016). This indicates that mid-elevation sites tend to host assemblages dominated by species with broader geographic ranges, whereas both low- and high-elevation sites are characterized by species with more restricted distributions. Exposition had no detectable influence (p = 0.90*)
-# the negative association in the linear term indicates that with increasing altitude there are fewer European species followed by an upward curvature suggesting that the most widespread (Palearctic or Holarctic) taxa occur at the highest elevations.
-
-
-# Body size: The model detects some altitude-related structure overall, but it’s weak and not robust at the individual term level.
-# Although the overall ANOVA indicated a marginal effect of altitude on the community-weighted mean body size (F₂,₇₄ = 3.25, p = 0.044), heteroscedasticity-robust standard errors and bootstrapped confidence intervals showed that neither the linear nor quadratic terms were individually significant (p > 0.5). Therefore, no consistent altitudinal pattern in body size CWM was detected.
-
-# Wings: The community-weighted mean of wing morphology (Wings_cwm) showed a strong nonlinear relationship with altitude (Type III ANOVA: F₂,₇₄ = 22.7, p < 0.001). Both the linear and quadratic terms of altitude remained significant when using heteroskedasticity-robust standard errors (HC3, p < 0.01) and bootstrapped confidence intervals (95% CI: linear −0.0110 to −0.0044; quadratic 3.9×10⁻⁶ to 9.1×10⁻⁶). Although tests indicated non-constant variance (Breusch–Pagan p = 0.022), the effect size and pattern were consistent across robust estimation procedures, supporting a strong altitudinal gradient in wing reduction.
-
-cwm_mat3 <- cwm_clean[, c("Wings_cwm", "Distribution_cwm", "Moisture_cwm")]
 # Correlation among CWMs 
 library(corrplot)
+cwm_mat3 <- cwm_clean[, c("Wings_cwm", "Body_size_cwm", "Dietary_cwm")]
 cor_mat <- cor(
-  cwm_results[, c("Wings_cwm", "Distribution_cwm", "Moisture_cwm")],
+  cwm_clean[, c("Wings_cwm", "Body_size_cwm", "Dietary_cwm")],
   method = "spearman",
   use = "pairwise.complete.obs"
 )
 colnames(cor_mat) <- rownames(cor_mat) <- c(
   "Dispersal ability",
-  "Biogeographical affinity",
-  "Moisture preference"
+  "Body size",
+  "Trophic strategy"
 )
 corrplot(
   cor_mat,
@@ -269,8 +213,8 @@ library(factoextra)
 cwm_mat3 <- cwm_clean %>%
   select(
     `Dispersal ability`   = Wings_cwm,
-    `Biogeographical affinity` = Distribution_cwm,
-    `Moisture preference`            = Moisture_cwm
+    `Body size` = Body_size_cwm,
+    `Trophic strategy`            = Dietary_cwm
   ) %>%
   na.omit()
 res.pca3 <- PCA(cwm_mat3, scale.unit = TRUE, graph = FALSE)
@@ -291,9 +235,9 @@ anova(rda_cwm, by = "axis", permutations = 999)
 
 # Mantel test of two CWMs
 # Distances
-d_dist  <- dist(cwm_clean$Distribution_cwm)
-d_wings <- dist(cwm_clean$Wings_cwm)
-d_moist <- dist(cwm_clean$Moisture_cwm)
+d_dist  <- dist(cwm_clean$Wings_cwm)
+d_wings <- dist(cwm_clean$Body_size_cwm)
+d_moist <- dist(cwm_clean$Dietary_cwm)
 
 mantel(d_dist, d_wings, method = "spearman", permutations = 999)
 mantel(d_dist, d_moist, method = "spearman", permutations = 999)

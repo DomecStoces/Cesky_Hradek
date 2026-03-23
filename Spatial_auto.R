@@ -106,11 +106,11 @@ df$Year <- factor(df$Year)
 df$Locality <- factor(df$Locality)
 
 mod_gam1 <- gam(
-  Wings_cwm_scaled ~ s(Locality, bs = "re") +
-    s(Altitude_scaled, bs = "cr", k = 5) + Exposition2 +
+  Body_size_cwm ~ s(Locality, bs = "re") +
+    s(Altitude_scaled, bs = "cr") + Exposition2 +
     s(Year, bs = "re"),
   data   = df,
-  family = betar(link = "cloglog"),
+  family = gaussian(link="log"),
   method = "REML"
 )
 
