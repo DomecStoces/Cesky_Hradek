@@ -1,5 +1,6 @@
-library(dplyr)
+# Dataset transformation for preliminary transformation step from two separate files #
 
+library(dplyr)
 # Delete from Trees - beech and spruce, keeping birch
 data_long1 <- data_long %>%
   filter(Trees == "birch")
