@@ -5,8 +5,8 @@ library(tibble)
 library(cluster)
 df <- read_excel("df.xlsx")
 
-sp_data <- read_excel("Rao_diversity2.xlsx", sheet = "sp")
-traits_data <- read_excel("Rao_diversity2.xlsx", sheet = "traits")
+sp_data <- read_excel("Rao_diversity.xlsx", sheet = "sp")
+traits_data <- read_excel("Rao_diversity.xlsx", sheet = "traits")
 traits_matrix <- column_to_rownames(traits_data, var = "Species")
 sp_matrix <- column_to_rownames(sp_data, var = "ID")
 
