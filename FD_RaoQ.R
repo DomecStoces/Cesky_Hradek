@@ -24,7 +24,7 @@ print(rao_results)
 
 ### FD RaoQ calculation in GAM ###
 library(mgcv)
-df <- read_excel("Rao_diversity1.xlsx", sheet = "RaoQ")
+df <- read_excel("Rao_diversity.xlsx", sheet = "RaoQ")
 df$Altitude_scaled <- as.numeric(scale(df$Elevation, center = TRUE, scale = TRUE))
 df$Locality <- as.factor(df$Locality)
 df$Year <- as.factor(df$Year)
