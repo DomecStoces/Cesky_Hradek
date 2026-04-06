@@ -1,6 +1,6 @@
 cwm_clean <- read_excel("df.xlsx", sheet = "Sheet1")
-
-# Fourth corner analysis
+################################################################################################################
+# Fourth corner analysis #
 library(readxl)
 library(ade4)
 library(dplyr)
@@ -78,113 +78,7 @@ pdf('table.pdf', width=8, height=10)
 plot(four.comb.aravo, alpha = 0.05, stat = "D2")
 dev.off()
 ################################################################################################################
-# Load required libraries
-library(dplyr)
-library(tidyr)
-library(scales)
-library(lme4)
-library(car)
-library(DHARMa)
-library(ade4)
-library(reshape2)
-library(tibble)
-library(lmtest)
-
-# Community-weighted means (CWMs) were calculated for each trait using species abundance as weights. Ordinal traits (e.g. breeding season, dispersal ability, moisture preference, biogeographic range) were converted to numeric ranks (1–5) reflecting increasing ecological gradients prior to averaging. Continuous traits (body size) were used directly.
-
-data_long1$Locality <- as.character(data_long1$Locality)
-
-data_long1 <- data_long1 %>%
-  mutate(
-    
-    # Dietary (1–3): Max-Min = 2
-    Dietary = (dplyr::recode(trimws(Dietary),
-                             "Granivor" = 1,
-                             "Omnivor"  = 2,
-                             "Predator" = 3,
-                             .default   = NA_real_) - 1) / 2,
-    
-    # Breeding (1–2): Max-Min = 1
-    Breeding = (dplyr::recode(trimws(Breeding),
-                              "Spring" = 1,
-                              "Autumn" = 2,
-                              .default = NA_real_) - 1) / 1,
-    
-    # Wings (1–3): Max-Min = 2
-    Wings = (dplyr::recode(trimws(Wing.morph),
-                           "A"   = 1,
-                           "A/B" = 1,
-                           "B"   = 1,
-                           "B/M" = 2,
-                           "M"   = 3,
-                           .default = NA_real_) - 1) / 2,
-    
-    # Bioindication (1–3): Max-Min = 2
-    Bioindication = (dplyr::recode(trimws(Bioindication.group),
-                                   "E" = 1,
-                                   "A" = 2,
-                                   "R" = 3,
-                                   .default = NA_real_) - 1) / 2,
-    
-    # Moisture (1–5): Max-Min = 4
-    Moisture = (dplyr::recode(trimws(Moisture.tolerance),
-                              "X" = 1,
-                              "S" = 2,
-                              "I" = 3,
-                              "V" = 4,
-                              "H" = 5,
-                              .default = NA_real_) - 1) / 4,
-    
-    # Distribution (1–5): Max-Min = 4
-    Distribution = (as.numeric(dplyr::recode(as.character(trimws(Areal.distribution)),
-                                             "South Palearctic" = 1,
-                                             "West Palearctic"  = 1,
-                                             "Europe"           = 2,
-                                             "Central Europe"   = 2,
-                                             "Eurasian"         = 3,
-                                             "Holarctic"        = 3,
-                                             "Palearctic"       = 3,
-                                             "Eurosiberian"     = 3,
-                                             "North Palearctic" = 4,
-                                             "Transpalearctic"  = 4,
-                                             "Circumboreal"     = 5,
-                                             .default = NA_real_
-    )) - 1) / 4,
-    
-    Body_size = as.numeric(Body.size)
-  )
-
-# Calculate Community Weighted Means (CWM)
-cwm_results <- data_long1 %>%
-  group_by(Year, Month, Locality) %>%
-  summarise(
-    # Major 3: Vectorized calculation using across()
-    across(
-      c(Dietary, Breeding, Wings, Bioindication, Moisture, Body_size, Distribution),
-      ~ weighted.mean(.x, Abundance, na.rm = TRUE),
-      .names = "{.col}_cwm"
-    ),
-    Total_Abundance = sum(Abundance, na.rm = TRUE),
-    .groups = "drop"
-  )
-
-site_env <- data_long1 %>%
-  group_by(Locality) %>%
-  summarise(
-    Altitude    = mean(Altitude, na.rm = TRUE),
-    Exposition2 = first(na.omit(Exposition2)), 
-    HR          = first(na.omit(HR)),
-    
-    .groups = "drop"
-  ) %>%
-  mutate(
-    Altitude_scaled  = as.numeric(scale(Altitude, center = TRUE, scale = TRUE)),
-    Altitude_scaled2 = Altitude_scaled^2
-  )
-cwm_clean <- cwm_results %>%
-  left_join(site_env, by = "Locality")
-
-# Correlation among CWMs 
+# Correlation among CWMs #
 library(corrplot)
 cwm_mat3 <- cwm_clean[, c("Wings_cwm", "Body_size_cwm", "Dietary_cwm")]
 cor_mat <- cor(
@@ -251,4 +145,3 @@ fviz_pca_var(
   col.var = "black"
 )
 dev.off()
-
