@@ -11,14 +11,20 @@ library(picante)
 
 ### Analysis of Phylogeny Sespd and meanPD ###
 PD <- read_excel("PD.xlsx", sheet = "List1")
-PD$Locality <- as.factor(PD$Locality)
-PD$Year     <- as.factor(PD$Year)
+PD$Elevation_Group  <- as.factor(PD$Elevation_Group)
+PD$Exposition_Group <- as.factor(PD$Exposition_Group)
+PD$Locality         <- as.factor(PD$Locality)
+PD$Year             <- as.factor(PD$Year)
+PD$Month            <- as.factor(PD$Month)
+
 mod_gam_pd <- gam(
-  meanPD ~ s(Altitude_scaled, bs = "cr", k = 5) + s(Locality, bs = "re") +
-    Exposition2 +
-    s(Year, bs = "re"),
-  data = PD, 
+  meanPD ~ Elevation_Group +          
+    Exposition_Group +         
+    s(Locality, bs = "re") + s(Month, bs = "re") +
+    s(Year, bs = "re"),        
+  data   = PD,
   family = gaussian(), 
+  select = TRUE,
   method = "REML"
 )
 
