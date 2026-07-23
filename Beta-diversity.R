@@ -18,19 +18,37 @@ df_agg <- data_long %>%
     values_fill = list(Abundance = 0)
   )
 
-# 4. Prepare metadata
+# 4. Prepare metadata and Apply Categorical Transformations
 df_agg <- df_agg %>%
   mutate(
+    # Format standard factors
     Locality = as.factor(Locality),
-    Exposition2 = as.factor(Exposition2),
     Year = as.factor(Year),
     Month = as.factor(Month),
-    Elevation_scaled = as.numeric(scale(Elevation))
+    
+    # Scale elevation first 
+    Elevation_scaled = as.numeric(scale(Elevation)),
+    
+    # --- EXPOSITION: Convert to South vs. Other ---
+    Exposition_Group = as.factor(ifelse(Exposition2 > 0, "South", "Other"))
   )
 
+# --- ELEVATION: Convert Scaled Altitude to Low, Medium, High ---
+# Using tertiles to evenly distribute observations
+alt_breaks_beta <- quantile(df_agg$Elevation_scaled, probs = c(0, 1/3, 2/3, 1), na.rm = TRUE)
+df_agg$Elevation_Group <- cut(df_agg$Elevation_scaled, 
+                              breaks = alt_breaks_beta, 
+                              include.lowest = TRUE, 
+                              labels = c("Low", "Medium", "High"))
+
+# Ensure Elevation_Group is a factor
+df_agg$Elevation_Group <- as.factor(df_agg$Elevation_Group)
+
+
 # 5. Prepare community matrix (species only)
+# Make sure to drop the newly created metadata columns as well!
 comm_agg <- df_agg %>% 
-  select(-Locality, -Exposition2, -Year, -Month, -Elevation, -Elevation_scaled) %>%
+  select(-Locality, -Year, -Month, -Exposition_Group, -Elevation_Group) %>%
   as.matrix()
 
 # 6. Create unique row names for repeated measures
@@ -55,8 +73,9 @@ dist_richness_sqrt <- sqrt(dist_richness)
 # =========================================
 # 9. PERMDISP: test homogeneity of multivariate dispersions
 # =========================================
-disp_jaccard <- betadisper(dist_jaccard_sqrt, df_agg$Exposition2)
-disp_simpson <- betadisper(dist_simpson_sqrt, df_agg$Exposition2)
+# Now using the categorical Exposition_Group
+disp_jaccard <- betadisper(dist_jaccard_sqrt, df_agg$Exposition_Group)
+disp_simpson <- betadisper(dist_simpson_sqrt, df_agg$Exposition_Group)
 
 cat("\n--- PERMDISP Results (Jaccard) ---\n")
 print(permutest(disp_jaccard, permutations = 999))
@@ -65,14 +84,14 @@ cat("\n--- PERMDISP Results (Simpson) ---\n")
 print(permutest(disp_simpson, permutations = 999))
 
 # =========================================
-# 10. PERMANOVA: test effects of Exposition, Elevation, Year, Month
+# 10. PERMANOVA: test effects of Exposition_Group, Elevation_Group, Year, Month
 #          with Locality as a stratum (repeated measures)
 # =========================================
 
 # Total beta-diversity (Jaccard)
 cat("\n--- PERMANOVA: Total Beta-Diversity (Jaccard) ---\n")
 perm_jaccard <- adonis2(
-  dist_jaccard_sqrt ~ Exposition2 + Elevation_scaled + Year + Month,
+  dist_jaccard_sqrt ~ Exposition_Group + Elevation_Group + Year + Month,
   data = df_agg,
   permutations = 999,
   by = "margin",
@@ -83,7 +102,7 @@ print(perm_jaccard)
 # Turnover (Simpson)
 cat("\n--- PERMANOVA: Turnover (Simpson) ---\n")
 perm_simpson <- adonis2(
-  dist_simpson_sqrt ~ Exposition2 + Elevation_scaled + Year + Month,
+  dist_simpson_sqrt ~ Exposition_Group + Elevation_Group + Year + Month,
   data = df_agg,
   permutations = 999,
   by = "margin",
@@ -94,7 +113,7 @@ print(perm_simpson)
 # Richness difference (Nestedness)
 cat("\n--- PERMANOVA: Richness Difference (Nestedness) ---\n")
 perm_richness <- adonis2(
-  dist_richness_sqrt ~ Exposition2 + Elevation_scaled + Year + Month,
+  dist_richness_sqrt ~ Exposition_Group + Elevation_Group + Year + Month,
   data = df_agg,
   permutations = 999,
   by = "margin",
