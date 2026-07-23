@@ -13,18 +13,29 @@ df$Locality         <- as.factor(df$Locality)
 df$Year             <- as.factor(df$Year)
 df$Month            <- as.factor(df$Month)
 
+# Apply the Smithson & Verkuilen (2006) compression
+N <- nrow(df)
+df$Dietary_cwm_beta <- (df$Dietary_cwm * (N - 1) + 0.5) / N
+df$Wings_cwm_beta   <- (df$Wings_cwm * (N - 1) + 0.5) / N
+
+# 3. Verify the transformation
+summary(df$Dietary_cwm_beta)
+summary(df$Wings_cwm_beta)
+
 mod_gam_rao <- gam(
   Q ~ 
-    s(Locality, bs = "re") + 
-    s(Altitude_scaled, bs = "cr", k = 5)  + Exposition2 +
-    s(Year, bs = "re"),
+    Elevation_Group +          
+    Exposition_Group +         
+    s(Locality, bs = "re") + s(Month, bs = "re") +
+    s(Year, bs = "re"),        
   data   = df,
-  family = tw(link="log"), select = TRUE,
+  family = tw(link="log"), 
+  select = TRUE,
   method = "REML"
 )
 
 mod_gam_rao <- gam(
-  Wings_cwm ~ 
+  Wings_cwm_beta ~ 
     Elevation_Group +          
     Exposition_Group +         
     s(Locality, bs = "re") + s(Month, bs = "re") +
@@ -42,7 +53,7 @@ mod_gam_rao <- gam(
     s(Locality, bs = "re") + s(Month, bs = "re") +
     s(Year, bs = "re"),        
   data   = df,
-  family = gaussian(link="identity"), 
+  family = gaussian(), 
   select = TRUE,
   method = "REML"
 )
