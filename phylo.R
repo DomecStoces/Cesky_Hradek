@@ -2,15 +2,11 @@ library(DHARMa)
 library(qgam)
 library(mgcViz)
 library(dplyr)
-library(gstat)
-library(sp)
-library(spdep)
 library(mgcv)
 library(readxl)
-library(picante)
 
 ### Analysis of Phylogeny Sespd and meanPD ###
-PD <- read_excel("PD.xlsx", sheet = "List1")
+PD <- read_excel("PD.xlsx", sheet = "Sheet1")
 PD$Elevation_Group  <- as.factor(PD$Elevation_Group)
 PD$Exposition_Group <- as.factor(PD$Exposition_Group)
 PD$Locality         <- as.factor(PD$Locality)
@@ -18,7 +14,7 @@ PD$Year             <- as.factor(PD$Year)
 PD$Month            <- as.factor(PD$Month)
 
 mod_gam_pd <- gam(
-  meanPD ~ Elevation_Group +          
+  Delta_plus ~ Elevation_Group +          
     Exposition_Group +         
     s(Locality, bs = "re") + s(Month, bs = "re") +
     s(Year, bs = "re"),        
