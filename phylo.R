@@ -25,6 +25,15 @@ mod_gam_pd <- gam(
   method = "REML"
 )
 
+library(lmerTest)
+mod_gam_pd <- lmer(
+  Delta_beta ~ Elevation_Group + Exposition_Group +
+    (1 | Locality) + (1 | Month),
+  data = PD,
+  REML = TRUE
+)
+summary(mod_gam_pd)
+
 summary(mod_gam_pd)
 par(mfrow = c(2, 2))
 gam.check(mod_gam_pd)
@@ -57,15 +66,13 @@ vg <- variogram(mean_res ~ 1,
 plot(vg, main = "Empirical variogram of GAM residuals")
 
 ### Graphical vizualization of SES.pd ###
-mod_gam_sespd <- gam(
-  SES_Delta_plus ~ Elevation_Group +          
-    Exposition_Group +         
-    s(Locality, bs = "re") + s(Month, bs = "re") +
-    s(Year, bs = "re"),        
-  data   = PD,
-  family = gaussian(),
-  method = "REML"
-)
+library(lmerTest)
+mod_gam_sespd <- lmer(
+    SES_Delta_plus ~ Elevation_Group + Exposition_Group +
+      (1 | Locality) + (1 | Month),
+    data = PD,
+    REML = TRUE
+  )
 summary(mod_gam_sespd)
 
 # 1. Optional but recommended: Set the logical order of your groups
