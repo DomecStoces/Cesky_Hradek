@@ -1,6 +1,3 @@
-library(DHARMa)
-library(qgam)
-library(mgcViz)
 library(dplyr)
 library(mgcv)
 library(readxl)
@@ -12,15 +9,19 @@ PD$Exposition_Group <- as.factor(PD$Exposition_Group)
 PD$Locality         <- as.factor(PD$Locality)
 PD$Year             <- as.factor(PD$Year)
 PD$Month            <- as.factor(PD$Month)
+PD <- PD %>%
+  mutate(Delta_scaled = Delta_plus / 100)
+n <- nrow(PD)
+PD <- PD %>%
+  mutate(Delta_beta = (Delta_scaled * (n - 1) + 0.5) / n)
 
 mod_gam_pd <- gam(
-  Delta_plus ~ Elevation_Group +          
+  Delta_beta ~ Elevation_Group +          
     Exposition_Group +         
     s(Locality, bs = "re") + s(Month, bs = "re") +
     s(Year, bs = "re"),        
   data   = PD,
-  family = gaussian(), 
-  select = TRUE,
+  family = betar(link = "logit"),
   method = "REML"
 )
 
@@ -32,7 +33,6 @@ gratia::draw(mod_gam_pd)
 plot(mod_gam_pd, select = 2)
 
 # correlogram (autocorrelation using Moran’s I based on site-averaged Pearson residuals)
-library(DHARMa)
 library(qgam)
 library(mgcViz)
 library(dplyr)
@@ -56,58 +56,66 @@ vg <- variogram(mean_res ~ 1,
                 cressie = TRUE)
 plot(vg, main = "Empirical variogram of GAM residuals")
 
-# Because multiple observations were collected within the same sites (hierarchical structure), locality was included as a random effect to account for spatial clustering and avoid pseudoreplication.
-PD %>%
-  group_by(Locality) %>%
-  summarise(alt = mean(Altitude_scaled))
-
 ### Graphical vizualization of SES.pd ###
 mod_gam_sespd <- gam(
-  SESpd ~ s(Altitude_scaled, bs = "cr", k = 5) + s(Locality, bs = "re") +
-    Exposition2 +
-    s(Year, bs = "re"),
-  data = df, 
-  family = gaussian(), 
+  SES_Delta_plus ~ Elevation_Group +          
+    Exposition_Group +         
+    s(Locality, bs = "re") + s(Month, bs = "re") +
+    s(Year, bs = "re"),        
+  data   = PD,
+  family = gaussian(),
   method = "REML"
 )
+summary(mod_gam_sespd)
 
+# 1. Optional but recommended: Set the logical order of your groups
+PD$Elevation_Group <- factor(PD$Elevation_Group, levels = c("Low", "Medium", "High"))
 
-library(ggplot2)
+# 2. Create the prediction grid
+# We extract predictions for each Elevation_Group. 
+# We hold Exposition_Group constant at its most common level (or reference level).
 newdat <- data.frame(
-  Altitude_scaled = seq(min(df$Altitude_scaled), max(df$Altitude_scaled), length = 200),
-  Exposition2 = mean(df$Exposition2),
+  Elevation_Group = levels(PD$Elevation_Group),
+  Exposition_Group = levels(as.factor(PD$Exposition_Group))[1], # Holds factor constant
   Locality = NA,
+  Month = NA,
   Year = NA
 )
+
+# 3. Run predictions excluding the random effects
 pred <- predict(mod_gam_sespd, newdata = newdat, se.fit = TRUE,
-                exclude = c("s(Locality)", "s(Year)"))
+                exclude = c("s(Locality)", "s(Month)", "s(Year)"))
+
 newdat$fit <- pred$fit
 newdat$se  <- pred$se.fit
 newdat$upper <- newdat$fit + 1.96 * newdat$se
 newdat$lower <- newdat$fit - 1.96 * newdat$se
 
-phylo<-ggplot(df, aes(x = Altitude_scaled, y = SESpd)) +
+library(ggplot2)
+
+phylo <- ggplot(PD, aes(x = Elevation_Group, y = SES_Delta_plus)) +
   
-  # The raw points - now matching the CWM plot using geom_jitter
-  geom_jitter(width = 0.03, height = 0, size = 1.8, alpha = 0.6, color = "black") +  
+  # 1. The raw points - widened jitter slightly for categorical separation
+  geom_jitter(width = 0.15, height = 0, size = 1.8, alpha = 0.3, color = "black") +  
   
-  # The GAM trendline
-  geom_smooth(method = "gam", color = "black", fill = "grey70", alpha = 0.3) +
+  # 2. The predicted GAM marginal means and 95% CIs
+  geom_pointrange(data = newdat, 
+                  aes(y = fit, ymin = lower, ymax = upper), 
+                  color = "red", size = 0.8, linewidth = 1.2) +
   
-  # The 0 baseline 
+  # 3. The 0 baseline 
   geom_hline(yintercept = 0, linetype = "solid", color = "black", linewidth = 0.5, alpha = 0.6) + 
   
-  # The +/- 1.96 significance thresholds
+  # 4. The +/- 1.96 significance thresholds
   geom_hline(yintercept = 1.96, linetype = "dashed", color = "black", alpha = 0.7) +
   geom_hline(yintercept = -1.96, linetype = "dashed", color = "black", alpha = 0.7) +
   
-  # X-Axis: Matches the CWM plot limits exactly
-  scale_x_continuous(breaks = seq(-2, 2, 1), minor_breaks = NULL) +
-  
+  # 5. Formatting 
   theme_minimal() +
   labs(
-    x = "Elevational gradient (Scaled)",
-    y = "SESpd") +
+    x = "Elevational Group",
+    y = expression("SES " * Delta^"+") # This nicely renders as SES Δ+ in the plot!
+  ) +
   theme(
     panel.background = element_blank(),
     plot.background  = element_blank(),
@@ -120,4 +128,6 @@ phylo<-ggplot(df, aes(x = Altitude_scaled, y = SESpd)) +
     axis.text        = element_text(colour = "black", size = 11),
     plot.margin      = margin(6, 8, 6, 6)
   )
+
+# View the plot
 phylo
